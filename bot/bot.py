@@ -51,6 +51,10 @@ class IdentityCrisisBot(commands.Bot):
         """Called when the bot is fully ready."""
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         logger.info(f"Connected to {len(self.guilds)} guild(s)")
+        
+        # Sync all guilds to database
+        await self._sync_guilds()
+        
         logger.info("=" * 50)
         logger.info("IdentityCrisis is ready to cause chaos!")
         logger.info("=" * 50)
@@ -61,6 +65,36 @@ class IdentityCrisisBot(commands.Bot):
                 name="your identity crisis"
             )
         )
+    
+    async def _sync_guilds(self) -> None:
+        """Sync all connected guilds to database."""
+        from sqlalchemy import select
+        from shared import Guild, get_db
+        
+        db = get_db()
+        async with db.async_session() as session:
+            for guild in self.guilds:
+                result = await session.execute(
+                    select(Guild).where(Guild.id == guild.id)
+                )
+                db_guild = result.scalar_one_or_none()
+                
+                if db_guild is None:
+                    db_guild = Guild(
+                        id=guild.id,
+                        name=guild.name,
+                        icon_url=str(guild.icon.url) if guild.icon else None,
+                    )
+                    session.add(db_guild)
+                    logger.info(f"Synced guild: {guild.name} ({guild.id})")
+                else:
+                    # Update name/icon if changed
+                    db_guild.name = guild.name
+                    db_guild.icon_url = str(guild.icon.url) if guild.icon else None
+            
+            await session.commit()
+        
+        logger.info(f"Synced {len(self.guilds)} guild(s) to database")
     
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Called when the bot joins a new guild."""
