@@ -47,17 +47,28 @@ class VoiceHandler(commands.Cog):
                 return custom_nicknames
             return DEFAULT_NICKNAMES.copy()
     
-    async def _is_channel_excluded(self, guild_id: int, channel_id: int) -> bool:
-        """Check if a channel is excluded from renaming."""
+    async def _is_channel_allowed(self, guild_id: int, channel_id: int) -> bool:
+        """
+        Check if the bot is allowed to work in this channel.
+        - If no included channels are set: ALL channels are allowed
+        - If included channels are set: ONLY those channels are allowed
+        """
+        from shared import IncludedChannel
+        
         db = get_db()
         async with db.async_session() as session:
+            # First check if there are ANY included channels for this guild
             result = await session.execute(
-                select(ExcludedChannel).where(
-                    ExcludedChannel.guild_id == guild_id,
-                    ExcludedChannel.channel_id == channel_id
-                )
+                select(IncludedChannel).where(IncludedChannel.guild_id == guild_id)
             )
-            return result.scalar_one_or_none() is not None
+            included_channels = result.scalars().all()
+            
+            # If no included channels are set, all channels are allowed
+            if not included_channels:
+                return True
+            
+            # If included channels exist, check if this channel is in the list
+            return any(ch.channel_id == channel_id for ch in included_channels)
         
     async def _get_custom_channel_rules(self, guild_id: int, channel_id: int) -> list[dict] | None:
         """Get custom rules for a channel, if any."""
@@ -265,9 +276,9 @@ class VoiceHandler(commands.Cog):
         
         # User joined a voice channel OR changed channel
         if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
-            # Check if channel is excluded
-            if await self._is_channel_excluded(member.guild.id, after.channel.id):
-                # If changing from a non-excluded channel to an excluded one, restore nickname
+            # Check if channel is allowed (whitelist logic)
+            if not await self._is_channel_allowed(member.guild.id, after.channel.id):
+                # If changing from an allowed channel to a non-allowed one, restore nickname
                 if self._user_changed_channel(before, after):
                     if guild_settings.restore_on_leave:
                         await self._restore_nickname(member)

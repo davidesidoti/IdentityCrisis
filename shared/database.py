@@ -45,7 +45,7 @@ class Guild(Base):
         back_populates="guild", 
         cascade="all, delete-orphan"
     )
-    excluded_channels: Mapped[list["ExcludedChannel"]] = relationship(
+    included_channels: Mapped[list["IncludedChannel"]] = relationship(
         back_populates="guild",
         cascade="all, delete-orphan"
     )
@@ -67,9 +67,9 @@ class Nickname(Base):
     guild: Mapped["Guild"] = relationship(back_populates="nicknames")
 
 
-class ExcludedChannel(Base):
-    """Voice channels excluded from nickname chaos."""
-    __tablename__ = "excluded_channels"
+class IncludedChannel(Base):
+    """Voice channels where the bot IS allowed to work (whitelist)."""
+    __tablename__ = "included_channels"
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"))
@@ -77,7 +77,7 @@ class ExcludedChannel(Base):
     channel_name: Mapped[str] = mapped_column(String(100))
     
     # Relationship
-    guild: Mapped["Guild"] = relationship(back_populates="excluded_channels")
+    guild: Mapped["Guild"] = relationship(back_populates="included_channels")
     
 
 class CustomChannel(Base):

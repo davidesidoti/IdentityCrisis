@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 
-from shared import ExcludedChannel, Guild, Nickname, UserSession, CustomChannel, get_db
+from shared import IncludedChannel, Guild, Nickname, UserSession, CustomChannel, get_db
 from web.discord_oauth import DiscordOAuth
 from web.routes.dependencies import get_current_user
 
@@ -28,7 +28,7 @@ class NicknameCreate(BaseModel):
     nickname: str
 
 
-class ExcludedChannelCreate(BaseModel):
+class IncludedChannelCreate(BaseModel):
     channel_id: str
     channel_name: str
     
@@ -213,17 +213,17 @@ async def delete_nickname(
         return {"message": "Nickname deleted"}
 
 
-# Excluded Channels
-@router.get("/guilds/{guild_id}/excluded-channels")
-async def get_excluded_channels(
+# Included Channels (whitelist)
+@router.get("/guilds/{guild_id}/included-channels")
+async def get_included_channels(
     guild_id: int,
     user: UserSession = Depends(get_current_user)
 ):
-    """Get all excluded channels for a guild."""
+    """Get all included channels for a guild."""
     db = get_db()
     async with db.async_session() as session:
         result = await session.execute(
-            select(ExcludedChannel).where(ExcludedChannel.guild_id == guild_id)
+            select(IncludedChannel).where(IncludedChannel.guild_id == guild_id)
         )
         channels = result.scalars().all()
         
@@ -239,26 +239,26 @@ async def get_excluded_channels(
         }
 
 
-@router.post("/guilds/{guild_id}/excluded-channels")
-async def add_excluded_channel(
+@router.post("/guilds/{guild_id}/included-channels")
+async def add_included_channel(
     guild_id: int,
-    data: ExcludedChannelCreate,
+    data: IncludedChannelCreate,
     user: UserSession = Depends(get_current_user)
 ):
-    """Add an excluded channel to a guild."""
+    """Add an included channel to a guild."""
     db = get_db()
     async with db.async_session() as session:
-        # Check if already excluded
+        # Check if already included
         result = await session.execute(
-            select(ExcludedChannel).where(
-                ExcludedChannel.guild_id == guild_id,
-                ExcludedChannel.channel_id == int(data.channel_id)
+            select(IncludedChannel).where(
+                IncludedChannel.guild_id == guild_id,
+                IncludedChannel.channel_id == int(data.channel_id)
             )
         )
         if result.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Channel already excluded")
+            raise HTTPException(status_code=400, detail="Channel already included")
         
-        channel = ExcludedChannel(
+        channel = IncludedChannel(
             guild_id=guild_id,
             channel_id=int(data.channel_id),
             channel_name=data.channel_name,
@@ -274,19 +274,19 @@ async def add_excluded_channel(
         }
 
 
-@router.delete("/guilds/{guild_id}/excluded-channels/{channel_db_id}")
-async def remove_excluded_channel(
+@router.delete("/guilds/{guild_id}/included-channels/{channel_db_id}")
+async def remove_included_channel(
     guild_id: int,
     channel_db_id: int,
     user: UserSession = Depends(get_current_user)
 ):
-    """Remove an excluded channel from a guild."""
+    """Remove an included channel from a guild."""
     db = get_db()
     async with db.async_session() as session:
         result = await session.execute(
-            delete(ExcludedChannel).where(
-                ExcludedChannel.id == channel_db_id,
-                ExcludedChannel.guild_id == guild_id
+            delete(IncludedChannel).where(
+                IncludedChannel.id == channel_db_id,
+                IncludedChannel.guild_id == guild_id
             )
         )
         await session.commit()
@@ -294,7 +294,7 @@ async def remove_excluded_channel(
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Channel not found")
         
-        return {"message": "Channel removed from exclusion list"}
+        return {"message": "Channel removed from inclusion list"}
 
 
 # Custom Channels with Rules

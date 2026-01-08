@@ -4,11 +4,11 @@ from .config import Config, get_config, load_config
 from .database import (
     Base,
     Database,
-    ExcludedChannel,
+    IncludedChannel,
+    CustomChannel,
     Guild,
     Nickname,
     UserSession,
-	CustomChannel,
     get_db,
     init_database,
 )
@@ -21,9 +21,9 @@ __all__ = [
     "Database",
     "Guild",
     "Nickname",
-    "ExcludedChannel",
+    "IncludedChannel",
+    "CustomChannel",
     "UserSession",
-	"CustomChannel",
     "get_db",
     "init_database",
 ]

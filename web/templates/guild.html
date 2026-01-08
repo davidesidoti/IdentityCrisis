@@ -117,18 +117,18 @@
             </div>
         </div>
         
-        <!-- Excluded Channels Card -->
+        <!-- Included Channels Card -->
         <div class="bg-discord-dark rounded-xl border border-gray-700">
             <div class="p-6 border-b border-gray-700 flex items-center justify-between">
                 <div>
-                    <h2 class="text-lg font-semibold text-white">Excluded Channels</h2>
-                    <p class="text-sm text-gray-400">Voice channels where nicknames won't be changed.</p>
+                    <h2 class="text-lg font-semibold text-white">Included Channels</h2>
+                    <p class="text-sm text-gray-400">Voice channels where the bot will work. Leave empty for all channels.</p>
                 </div>
-                <span class="text-sm text-gray-500" x-text="excludedChannels.length + ' channel(s)'"></span>
+                <span class="text-sm text-gray-500" x-text="includedChannels.length + ' channel(s)'"></span>
             </div>
             <div class="p-6">
                 <!-- Add channel form -->
-                <form @submit.prevent="addExcludedChannel()" class="flex gap-3 mb-6">
+                <form @submit.prevent="addIncludedChannel()" class="flex gap-3 mb-6">
                     <input type="text" 
                            x-model="newChannelId"
                            placeholder="Channel ID"
@@ -147,15 +147,24 @@
                     To get a channel ID: Enable Developer Mode in Discord settings, right-click the channel, and click "Copy Channel ID"
                 </p>
                 
+                <!-- Info box -->
+                <div class="mb-4 p-3 bg-discord-blurple/10 border border-discord-blurple/30 rounded-lg">
+                    <p class="text-sm text-gray-300">
+                        <span class="text-discord-blurple font-medium">Tip:</span> 
+                        If no channels are added, the bot works on <strong>all</strong> voice channels.
+                        Add channels here to make the bot work <strong>only</strong> on those specific channels.
+                    </p>
+                </div>
+                
                 <!-- Channel list -->
-                <div x-show="excludedChannels.length > 0" class="space-y-2">
-                    <template x-for="channel in excludedChannels" :key="channel.id">
+                <div x-show="includedChannels.length > 0" class="space-y-2">
+                    <template x-for="channel in includedChannels" :key="channel.id">
                         <div class="flex items-center justify-between bg-discord-darker rounded-lg px-4 py-3 group">
                             <div>
                                 <span class="text-gray-300" x-text="channel.channel_name"></span>
                                 <span class="text-xs text-gray-500 ml-2" x-text="'#' + channel.channel_id"></span>
                             </div>
-                            <button @click="removeExcludedChannel(channel.id)"
+                            <button @click="removeIncludedChannel(channel.id)"
                                     class="text-gray-500 hover:text-discord-red opacity-0 group-hover:opacity-100 transition-all">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -166,8 +175,8 @@
                 </div>
                 
                 <!-- Empty state -->
-                <div x-show="excludedChannels.length === 0" class="text-center py-8 text-gray-500">
-                    <p>No excluded channels. All voice channels will trigger renaming.</p>
+                <div x-show="includedChannels.length === 0" class="text-center py-8 text-gray-500">
+                    <p>No channels added. Bot is active on <strong>all</strong> voice channels.</p>
                 </div>
             </div>
         </div>
@@ -277,7 +286,7 @@ function guildSettings(guildId) {
         guildId: guildId,
         guild: {},
         nicknames: [],
-        excludedChannels: [],
+        includedChannels: [],
         loading: true,
         newNickname: '',
         newChannelId: '',
@@ -292,7 +301,7 @@ function guildSettings(guildId) {
             await Promise.all([
                 this.loadGuild(),
                 this.loadNicknames(),
-                this.loadExcludedChannels(),
+                this.loadIncludedChannels(),
                 this.loadCustomChannels(),
                 this.loadAvailableRules()
             ]);
@@ -314,11 +323,11 @@ function guildSettings(guildId) {
             }
         },
         
-        async loadExcludedChannels() {
-            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels`);
+        async loadIncludedChannels() {
+            const response = await fetch(`/api/guilds/${this.guildId}/included-channels`);
             if (response.ok) {
                 const data = await response.json();
-                this.excludedChannels = data.channels;
+                this.includedChannels = data.channels;
             }
         },
         
@@ -382,10 +391,10 @@ function guildSettings(guildId) {
             }
         },
         
-        async addExcludedChannel() {
+        async addIncludedChannel() {
             if (!this.newChannelId.trim() || !this.newChannelName.trim()) return;
             
-            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels`, {
+            const response = await fetch(`/api/guilds/${this.guildId}/included-channels`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -396,24 +405,24 @@ function guildSettings(guildId) {
             
             if (response.ok) {
                 const data = await response.json();
-                this.excludedChannels.push(data);
+                this.includedChannels.push(data);
                 this.newChannelId = '';
                 this.newChannelName = '';
-                this.toast('Channel excluded!', 'success');
+                this.toast('Channel added!', 'success');
             } else {
                 const error = await response.json();
-                this.toast(error.detail || 'Failed to exclude channel', 'error');
+                this.toast(error.detail || 'Failed to add channel', 'error');
             }
         },
         
-        async removeExcludedChannel(id) {
-            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels/${id}`, {
+        async removeIncludedChannel(id) {
+            const response = await fetch(`/api/guilds/${this.guildId}/included-channels/${id}`, {
                 method: 'DELETE'
             });
             
             if (response.ok) {
-                this.excludedChannels = this.excludedChannels.filter(c => c.id !== id);
-                this.toast('Channel removed from exclusions!', 'success');
+                this.includedChannels = this.includedChannels.filter(c => c.id !== id);
+                this.toast('Channel removed!', 'success');
             } else {
                 this.toast('Failed to remove channel', 'error');
             }
