@@ -12,7 +12,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot.data import DEFAULT_NICKNAMES, apply_rules
-from shared import ExcludedChannel, Guild, Nickname, get_db
+from shared import IncludedChannel, Guild, Nickname, get_db
 
 logger = logging.getLogger(__name__)
 
