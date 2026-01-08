@@ -183,6 +183,18 @@ class VoiceHandler(commands.Cog):
         """Check if this event represents a user leaving voice entirely."""
         return before.channel is not None and after.channel is None
     
+    def _user_changed_channel(
+        self,
+        before: discord.VoiceState,
+        after: discord.VoiceState
+    ) -> bool:
+        """Check if user moved from one channel to another."""
+        return (
+            before.channel is not None 
+            and after.channel is not None 
+            and before.channel.id != after.channel.id
+        )
+    
     def _can_rename_member(self, member: discord.Member) -> bool:
         """Check if the bot can rename this member."""
         if member.id == self.bot.user.id:
@@ -232,10 +244,14 @@ class VoiceHandler(commands.Cog):
         if not guild_settings.enabled:
             return
         
-        # User joined a voice channel
-        if self._user_joined_voice(before, after):
+        # User joined a voice channel OR changed channel
+        if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
             # Check if channel is excluded
             if await self._is_channel_excluded(member.guild.id, after.channel.id):
+                # If changing from a non-excluded channel to an excluded one, restore nickname
+                if self._user_changed_channel(before, after):
+                    if guild_settings.restore_on_leave:
+                        await self._restore_nickname(member)
                 return
             
             if not self._can_rename_member(member):
@@ -247,12 +263,13 @@ class VoiceHandler(commands.Cog):
                 logger.debug(f"Skipping {member.name}: has immunity role")
                 return
             
-            # Store original nickname
-            self._store_original_nickname(
-                member.guild.id, 
-                member.id, 
-                member.nick
-            )
+            # Store original nickname only if first time joining (not when changing channels)
+            if self._user_joined_voice(before, after):
+                self._store_original_nickname(
+                    member.guild.id, 
+                    member.id, 
+                    member.nick
+                )
             
             # Check for custom channel rules first
             custom_rules = await self._get_custom_channel_rules(
@@ -261,8 +278,9 @@ class VoiceHandler(commands.Cog):
             )
             
             if custom_rules:
-                # Apply transformation rules to the user's current display name
-                original_name = member.nick or member.display_name
+                # Apply transformation rules to the user's ORIGINAL name (not current nick)
+                original = self.original_nicknames.get(member.guild.id, {}).get(member.id)
+                original_name = original if original else member.name
                 new_nickname = apply_rules(original_name, custom_rules)
             else:
                 # Standard random nickname
