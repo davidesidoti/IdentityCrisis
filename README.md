@@ -1,104 +1,195 @@
 # IdentityCrisis 🎭
 
-A chaotic Discord bot that gives users a new identity every time they join a voice channel. Who are you? Nobody knows anymore.
+A chaotic Discord bot that gives users a new identity every time they join a voice channel. Now with a fancy web dashboard!
 
 ## What does it do?
 
 Every time someone joins a voice channel, IdentityCrisis automatically changes their server nickname to something completely random. Your friend Marco? Now he's "Gino Panino". Your buddy Sarah? She just became "Captain Spaghetti".
 
-Optionally, the bot can restore the original nickname when users leave the voice channel, or just let the chaos accumulate.
-
 ## Features
 
 - **Automatic Renaming**: Detects when users join voice channels and assigns random nicknames
-- **Nickname Restoration**: Optionally restore original nicknames when users leave (configurable)
+- **Nickname Restoration**: Optionally restore original nicknames when users leave
+- **Web Dashboard**: Beautiful web interface to manage settings per server
+- **Discord OAuth2**: Login with Discord to manage your servers
 - **Per-Server Configuration**: Each server can have its own settings and nickname lists
-- **Custom Nickname Lists**: Add your own nicknames via slash commands
-- **Immunity Role**: Protect certain users from the chaos (if you're boring like that)
+- **Custom Nickname Lists**: Add your own nicknames via the dashboard
+- **Immunity Role**: Protect certain users from the chaos
+- **Excluded Channels**: Skip renaming in specific voice channels
 
-## Requirements
+## Tech Stack
 
-- Python 3.11+
-- A Discord Bot Token
-- A sense of humor
+- **Bot**: Python 3.11+, discord.py
+- **Web**: FastAPI, Jinja2, TailwindCSS, Alpine.js
+- **Database**: PostgreSQL with SQLAlchemy (async)
+- **Auth**: Discord OAuth2
+
+## Project Structure
+
+```
+IdentityCrisis/
+├── main.py              # Entry point (runs bot + web)
+├── requirements.txt
+├── .env.example
+├── bot/                 # Discord bot
+│   ├── bot.py
+│   ├── cogs/
+│   │   └── voice_handler.py
+│   └── data/
+│       └── nicknames.py
+├── web/                 # Web dashboard
+│   ├── app.py
+│   ├── discord_oauth.py
+│   ├── routes/
+│   │   ├── auth.py
+│   │   ├── api.py
+│   │   └── pages.py
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── home.html
+│   │   ├── dashboard.html
+│   │   └── guild.html
+│   └── static/
+└── shared/              # Shared code
+    ├── config.py
+    └── database.py
+```
 
 ## Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/davidesidoti/IdentityCrisis.git
-   cd IdentityCrisis
-   ```
+### Prerequisites
 
-2. **Create a virtual environment** (recommended)
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+- Python 3.11+
+- PostgreSQL database
+- A Discord Bot Token
+- A sense of humor
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Clone the repository
 
-4. **Set up your environment variables**
-   
-   Create a `.env` file in the root directory:
-   ```env
-   DISCORD_TOKEN=your_bot_token_here
-   ```
+```bash
+git clone https://github.com/yourusername/IdentityCrisis.git
+cd IdentityCrisis
+```
 
-5. **Run the bot**
-   ```bash
-   python main.py
-   ```
+### 2. Create a virtual environment
 
-## Discord Bot Setup
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application and add a bot
-3. Enable the following **Privileged Gateway Intents**:
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Set up PostgreSQL
+
+Create a database for the bot:
+
+```bash
+createdb identitycrisis
+# Or via psql:
+# CREATE DATABASE identitycrisis;
+```
+
+### 5. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in your values:
+
+- `DISCORD_TOKEN`: Your bot token from Discord Developer Portal
+- `DISCORD_CLIENT_ID`: Your application's Client ID
+- `DISCORD_CLIENT_SECRET`: Your application's Client Secret
+- `DATABASE_URL`: PostgreSQL connection string
+- `SECRET_KEY`: Random string for session security
+
+### 6. Set up Discord OAuth2
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Select your application
+3. Go to **OAuth2** > **General**
+4. Add a redirect URI: `http://localhost:8000/auth/callback`
+5. Copy Client ID and Client Secret to your `.env`
+
+### 7. Set up Discord Bot
+
+In the Developer Portal:
+
+1. Go to **Bot** section
+2. Enable these **Privileged Gateway Intents**:
    - Server Members Intent
-   - Message Content Intent (if you want text commands)
-4. Generate an invite link with these permissions:
-   - Manage Nicknames
-   - View Channels
-   - Connect (to detect voice channel joins)
-5. Invite the bot to your server
+   - Message Content Intent (optional)
+3. Go to **OAuth2** > **URL Generator**
+4. Select scopes: `bot`
+5. Select permissions: `Manage Nicknames`, `View Channels`, `Connect`
+6. Use the generated URL to invite the bot
 
-## Commands
+### 8. Run the application
 
-| Command | Description |
-|---------|-------------|
-| `/nicknames list` | Show current nickname list for this server |
-| `/nicknames add <name>` | Add a nickname to the server's list |
-| `/nicknames remove <name>` | Remove a nickname from the list |
-| `/nicknames reset` | Reset to default nickname list |
-| `/config restore <on/off>` | Toggle nickname restoration on voice leave |
-| `/config immunity <role>` | Set the immunity role |
-| `/stats` | Show renaming statistics |
+```bash
+python main.py
+```
 
-## Default Nicknames
-
-The bot comes with a curated selection of absurd nicknames mixing Italian and English humor. Here's a taste:
-
-- Gino Panino
-- Captain Spaghetti
-- Lord Farquaad's Cousin
-- Definitely Not A Bot
-- Someone's Mom
-- Il Magnifico
-- Kevin (just Kevin)
-- Professional Overthinker
-- Certified Chaos Agent
-- ...and many more
+This starts both the Discord bot and the web dashboard. Access the dashboard at `http://localhost:8000`.
 
 ## Configuration
 
-Each server can customize:
-- **Nickname list**: Add server-specific nicknames
-- **Restore mode**: Whether to restore original nicknames on voice leave
-- **Immunity role**: A role that protects users from renaming
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_TOKEN` | Yes | Discord bot token |
+| `DISCORD_CLIENT_ID` | Yes | Discord OAuth2 client ID |
+| `DISCORD_CLIENT_SECRET` | Yes | Discord OAuth2 client secret |
+| `DISCORD_REDIRECT_URI` | No | OAuth2 callback URL (default: `http://localhost:8000/auth/callback`) |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SECRET_KEY` | No | Session encryption key (change in production!) |
+| `WEB_HOST` | No | Web server host (default: `0.0.0.0`) |
+| `WEB_PORT` | No | Web server port (default: `8000`) |
+| `BASE_URL` | No | Public URL of the dashboard |
+
+## Deployment
+
+### With Docker (Recommended)
+
+Coming soon...
+
+### Manual Deployment
+
+1. Set up a PostgreSQL database
+2. Configure environment variables for production
+3. Use a process manager like `systemd` or `supervisor`
+4. Put behind a reverse proxy (nginx/caddy) with HTTPS
+
+Example nginx config:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name identitycrisis.yourdomain.com;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+## Default Nicknames
+
+The bot comes with a curated selection of absurd nicknames:
+
+- Gino Panino, Captain Spaghetti, Lord Farquaad's Cousin
+- Definitely Not A Bot, Someone's Mom, Kevin
+- CEO of Nothing, Professional Screamer, Local Cryptid
+- Human Lasagna, Angry Mozzarella, Espresso Depresso
+- ...and many more
 
 ## Contributing
 

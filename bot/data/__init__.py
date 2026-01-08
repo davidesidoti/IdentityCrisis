@@ -1,4 +1,4 @@
-"""Data package for IdentityCrisis."""
+"""Data package for IdentityCrisis bot."""
 
 from .nicknames import DEFAULT_NICKNAMES
 

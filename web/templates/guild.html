@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}Server Settings - IdentityCrisis{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="guildSettings({{ guild_id }})">
+    <!-- Back button -->
+    <a href="/dashboard" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Back to Dashboard
+    </a>
+    
+    <!-- Loading state -->
+    <div x-show="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-discord-blurple"></div>
+    </div>
+    
+    <!-- Content -->
+    <div x-show="!loading" x-cloak>
+        <!-- Header -->
+        <div class="flex items-center space-x-4 mb-8">
+            <template x-if="guild.icon_url">
+                <img :src="guild.icon_url" :alt="guild.name" class="w-16 h-16 rounded-xl">
+            </template>
+            <template x-if="!guild.icon_url">
+                <div class="w-16 h-16 rounded-xl bg-discord-light flex items-center justify-center text-2xl font-bold text-gray-400"
+                     x-text="guild.name ? guild.name.charAt(0).toUpperCase() : '?'">
+                </div>
+            </template>
+            <div>
+                <h1 class="text-2xl font-bold text-white" x-text="guild.name"></h1>
+                <p class="text-gray-400">Server Settings</p>
+            </div>
+        </div>
+        
+        <!-- Settings Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-700">
+                <h2 class="text-lg font-semibold text-white">General Settings</h2>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Enabled toggle -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-white font-medium">Enable Bot</h3>
+                        <p class="text-sm text-gray-400">Turn nickname chaos on or off for this server</p>
+                    </div>
+                    <button @click="toggleEnabled()" 
+                            :class="guild.enabled ? 'bg-discord-green' : 'bg-gray-600'"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
+                        <span :class="guild.enabled ? 'translate-x-6' : 'translate-x-1'"
+                              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+                    </button>
+                </div>
+                
+                <!-- Restore on leave toggle -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-white font-medium">Restore Nickname on Leave</h3>
+                        <p class="text-sm text-gray-400">Restore original nickname when user leaves voice channel</p>
+                    </div>
+                    <button @click="toggleRestore()" 
+                            :class="guild.restore_on_leave ? 'bg-discord-green' : 'bg-gray-600'"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
+                        <span :class="guild.restore_on_leave ? 'translate-x-6' : 'translate-x-1'"
+                              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Nicknames Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Custom Nicknames</h2>
+                    <p class="text-sm text-gray-400">Add your own nicknames. Leave empty to use defaults.</p>
+                </div>
+                <span class="text-sm text-gray-500" x-text="nicknames.length + ' nickname(s)'"></span>
+            </div>
+            <div class="p-6">
+                <!-- Add nickname form -->
+                <form @submit.prevent="addNickname()" class="flex gap-3 mb-6">
+                    <input type="text" 
+                           x-model="newNickname"
+                           maxlength="32"
+                           placeholder="Enter a nickname..."
+                           class="flex-1 bg-discord-darker border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                    <button type="submit" 
+                            :disabled="!newNickname.trim()"
+                            class="px-4 py-2 bg-discord-blurple hover:bg-opacity-80 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors">
+                        Add
+                    </button>
+                </form>
+                
+                <!-- Nickname list -->
+                <div x-show="nicknames.length > 0" class="space-y-2">
+                    <template x-for="nickname in nicknames" :key="nickname.id">
+                        <div class="flex items-center justify-between bg-discord-darker rounded-lg px-4 py-3 group">
+                            <span class="text-gray-300" x-text="nickname.nickname"></span>
+                            <button @click="deleteNickname(nickname.id)"
+                                    class="text-gray-500 hover:text-discord-red opacity-0 group-hover:opacity-100 transition-all">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Empty state -->
+                <div x-show="nicknames.length === 0" class="text-center py-8 text-gray-500">
+                    <p>No custom nicknames. Using default list.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Excluded Channels Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Excluded Channels</h2>
+                    <p class="text-sm text-gray-400">Voice channels where nicknames won't be changed.</p>
+                </div>
+                <span class="text-sm text-gray-500" x-text="excludedChannels.length + ' channel(s)'"></span>
+            </div>
+            <div class="p-6">
+                <!-- Add channel form -->
+                <form @submit.prevent="addExcludedChannel()" class="flex gap-3 mb-6">
+                    <input type="text" 
+                           x-model="newChannelId"
+                           placeholder="Channel ID"
+                           class="w-48 bg-discord-darker border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                    <input type="text" 
+                           x-model="newChannelName"
+                           placeholder="Channel Name (for display)"
+                           class="flex-1 bg-discord-darker border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                    <button type="submit" 
+                            :disabled="!newChannelId.trim() || !newChannelName.trim()"
+                            class="px-4 py-2 bg-discord-blurple hover:bg-opacity-80 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors">
+                        Add
+                    </button>
+                </form>
+                <p class="text-xs text-gray-500 mb-4">
+                    To get a channel ID: Enable Developer Mode in Discord settings, right-click the channel, and click "Copy Channel ID"
+                </p>
+                
+                <!-- Channel list -->
+                <div x-show="excludedChannels.length > 0" class="space-y-2">
+                    <template x-for="channel in excludedChannels" :key="channel.id">
+                        <div class="flex items-center justify-between bg-discord-darker rounded-lg px-4 py-3 group">
+                            <div>
+                                <span class="text-gray-300" x-text="channel.channel_name"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="'#' + channel.channel_id"></span>
+                            </div>
+                            <button @click="removeExcludedChannel(channel.id)"
+                                    class="text-gray-500 hover:text-discord-red opacity-0 group-hover:opacity-100 transition-all">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Empty state -->
+                <div x-show="excludedChannels.length === 0" class="text-center py-8 text-gray-500">
+                    <p>No excluded channels. All voice channels will trigger renaming.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function guildSettings(guildId) {
+    return {
+        guildId: guildId,
+        guild: {},
+        nicknames: [],
+        excludedChannels: [],
+        loading: true,
+        newNickname: '',
+        newChannelId: '',
+        newChannelName: '',
+        
+        async init() {
+            await Promise.all([
+                this.loadGuild(),
+                this.loadNicknames(),
+                this.loadExcludedChannels()
+            ]);
+            this.loading = false;
+        },
+        
+        async loadGuild() {
+            const response = await fetch(`/api/guilds/${this.guildId}`);
+            if (response.ok) {
+                this.guild = await response.json();
+            }
+        },
+        
+        async loadNicknames() {
+            const response = await fetch(`/api/guilds/${this.guildId}/nicknames`);
+            if (response.ok) {
+                const data = await response.json();
+                this.nicknames = data.nicknames;
+            }
+        },
+        
+        async loadExcludedChannels() {
+            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels`);
+            if (response.ok) {
+                const data = await response.json();
+                this.excludedChannels = data.channels;
+            }
+        },
+        
+        async updateSettings() {
+            const response = await fetch(`/api/guilds/${this.guildId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    enabled: this.guild.enabled,
+                    restore_on_leave: this.guild.restore_on_leave,
+                    immunity_role_id: this.guild.immunity_role_id
+                })
+            });
+            
+            if (response.ok) {
+                this.toast('Settings saved!', 'success');
+            } else {
+                this.toast('Failed to save settings', 'error');
+            }
+        },
+        
+        async toggleEnabled() {
+            this.guild.enabled = !this.guild.enabled;
+            await this.updateSettings();
+        },
+        
+        async toggleRestore() {
+            this.guild.restore_on_leave = !this.guild.restore_on_leave;
+            await this.updateSettings();
+        },
+        
+        async addNickname() {
+            if (!this.newNickname.trim()) return;
+            
+            const response = await fetch(`/api/guilds/${this.guildId}/nicknames`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname: this.newNickname.trim() })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.nicknames.push(data);
+                this.newNickname = '';
+                this.toast('Nickname added!', 'success');
+            } else {
+                this.toast('Failed to add nickname', 'error');
+            }
+        },
+        
+        async deleteNickname(id) {
+            const response = await fetch(`/api/guilds/${this.guildId}/nicknames/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.nicknames = this.nicknames.filter(n => n.id !== id);
+                this.toast('Nickname deleted!', 'success');
+            } else {
+                this.toast('Failed to delete nickname', 'error');
+            }
+        },
+        
+        async addExcludedChannel() {
+            if (!this.newChannelId.trim() || !this.newChannelName.trim()) return;
+            
+            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    channel_id: parseInt(this.newChannelId), 
+                    channel_name: this.newChannelName.trim() 
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.excludedChannels.push(data);
+                this.newChannelId = '';
+                this.newChannelName = '';
+                this.toast('Channel excluded!', 'success');
+            } else {
+                const error = await response.json();
+                this.toast(error.detail || 'Failed to exclude channel', 'error');
+            }
+        },
+        
+        async removeExcludedChannel(id) {
+            const response = await fetch(`/api/guilds/${this.guildId}/excluded-channels/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.excludedChannels = this.excludedChannels.filter(c => c.id !== id);
+                this.toast('Channel removed from exclusions!', 'success');
+            } else {
+                this.toast('Failed to remove channel', 'error');
+            }
+        },
+        
+        toast(message, type = 'success') {
+            window.dispatchEvent(new CustomEvent('toast', { 
+                detail: { message, type, id: Date.now() } 
+            }));
+        }
+    }
+}
+</script>
+{% endblock %}

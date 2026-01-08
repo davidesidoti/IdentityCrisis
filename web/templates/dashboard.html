@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - IdentityCrisis{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="dashboard()">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white">Your Servers</h1>
+        <p class="mt-2 text-gray-400">
+            Select a server to configure IdentityCrisis. Only servers where you have admin permissions and the bot is installed are shown.
+        </p>
+    </div>
+    
+    <!-- Loading state -->
+    <div x-show="loading" class="flex justify-center py-12">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-discord-blurple"></div>
+    </div>
+    
+    <!-- Error state -->
+    <div x-show="error && !loading" x-cloak class="bg-discord-red/20 border border-discord-red rounded-lg p-4 mb-8">
+        <p class="text-discord-red" x-text="error"></p>
+    </div>
+    
+    <!-- Empty state -->
+    <div x-show="!loading && !error && guilds.length === 0" x-cloak 
+         class="bg-discord-dark rounded-xl p-12 text-center border border-gray-700">
+        <div class="text-6xl mb-4">🤔</div>
+        <h3 class="text-xl font-semibold text-white mb-2">No servers found</h3>
+        <p class="text-gray-400 mb-6">
+            Make sure you have admin permissions on a server where IdentityCrisis is installed.
+        </p>
+        <a href="https://discord.com/api/oauth2/authorize?client_id={{ config.discord_client_id }}&permissions=134217728&scope=bot" 
+           target="_blank"
+           class="inline-flex items-center px-6 py-3 bg-discord-blurple hover:bg-opacity-80 rounded-lg text-white font-medium transition-colors">
+            Add Bot to a Server
+        </a>
+    </div>
+    
+    <!-- Server grid -->
+    <div x-show="!loading && guilds.length > 0" x-cloak
+         class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="guild in guilds" :key="guild.id">
+            <a :href="'/dashboard/guild/' + guild.id"
+               class="bg-discord-dark rounded-xl p-6 border border-gray-700 hover:border-discord-blurple transition-all hover:transform hover:scale-[1.02] group">
+                <div class="flex items-center space-x-4">
+                    <template x-if="guild.icon_url">
+                        <img :src="guild.icon_url" :alt="guild.name" 
+                             class="w-16 h-16 rounded-xl">
+                    </template>
+                    <template x-if="!guild.icon_url">
+                        <div class="w-16 h-16 rounded-xl bg-discord-light flex items-center justify-center text-2xl font-bold text-gray-400"
+                             x-text="guild.name.charAt(0).toUpperCase()">
+                        </div>
+                    </template>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-lg font-semibold text-white truncate group-hover:text-discord-blurple transition-colors"
+                            x-text="guild.name"></h3>
+                        <p class="text-sm text-gray-400">Click to configure</p>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-500 group-hover:text-discord-blurple transition-colors" 
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </a>
+        </template>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        guilds: [],
+        loading: true,
+        error: null,
+        
+        async init() {
+            try {
+                const response = await fetch('/api/guilds');
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/auth/login';
+                        return;
+                    }
+                    throw new Error('Failed to load servers');
+                }
+                const data = await response.json();
+                this.guilds = data.guilds;
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

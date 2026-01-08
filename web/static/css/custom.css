@@ -1,0 +1,24 @@
+/* 
+ * IdentityCrisis Custom Styles
+ * Most styling is done via TailwindCSS classes in templates.
+ * Add any custom CSS here if needed.
+ */
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e1f22;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4f545c;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #5865f2;
+}
