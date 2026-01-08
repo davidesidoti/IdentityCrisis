@@ -8,6 +8,7 @@ from .database import (
     Guild,
     Nickname,
     UserSession,
+	CustomChannel,
     get_db,
     init_database,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "Nickname",
     "ExcludedChannel",
     "UserSession",
+	"CustomChannel",
     "get_db",
     "init_database",
 ]
