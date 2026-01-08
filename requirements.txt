@@ -1,0 +1,7 @@
+# IdentityCrisis Bot Dependencies
+
+# Discord API wrapper
+discord.py>=2.3.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
