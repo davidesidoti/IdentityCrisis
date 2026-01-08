@@ -3,7 +3,7 @@
 {% block title %}Server Settings - IdentityCrisis{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="guildSettings({{ guild_id }})">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="guildSettings('{{ guild_id }}')">
     <!-- Back button -->
     <a href="/dashboard" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors">
         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
