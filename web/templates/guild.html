@@ -171,6 +171,101 @@
                 </div>
             </div>
         </div>
+
+		<!-- Custom Channels Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700 mt-8">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Custom Channel Rules</h2>
+                    <p class="text-sm text-gray-400">Apply name transformations in specific voice channels.</p>
+                </div>
+                <span class="text-sm text-gray-500" x-text="customChannels.length + ' channel(s)'"></span>
+            </div>
+            <div class="p-6">
+                <!-- Add custom channel form -->
+                <div class="mb-6 p-4 bg-discord-darker rounded-lg">
+                    <div class="flex gap-3 mb-4">
+                        <input type="text" 
+                               x-model="newCustomChannelId"
+                               placeholder="Channel ID"
+                               class="w-48 bg-discord-dark border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                        <input type="text" 
+                               x-model="newCustomChannelName"
+                               placeholder="Channel Name"
+                               class="flex-1 bg-discord-dark border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                    </div>
+                    
+                    <!-- Rule selector -->
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-400 mb-2">Select rules to apply (in order):</p>
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            <template x-for="rule in availableRules" :key="rule.type">
+                                <button @click="toggleNewRule(rule)"
+                                        :class="isRuleSelected(rule.type) ? 'bg-discord-blurple text-white' : 'bg-discord-dark text-gray-300 hover:bg-discord-light'"
+                                        class="px-3 py-1.5 rounded-lg text-sm border border-gray-600 transition-colors"
+                                        x-text="rule.name">
+                                </button>
+                            </template>
+                        </div>
+                        
+                        <!-- Show value inputs for prefix/suffix -->
+                        <template x-for="(rule, index) in newCustomRules" :key="index">
+                            <div x-show="rule.has_value" class="flex items-center gap-2 mb-2">
+                                <span class="text-sm text-gray-400 w-24" x-text="rule.type + ':'"></span>
+                                <input type="text" 
+                                       x-model="rule.value"
+                                       placeholder="Enter value..."
+                                       class="flex-1 bg-discord-dark border border-gray-600 rounded-lg px-3 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple text-sm">
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Preview -->
+                    <div x-show="newCustomRules.length > 0" class="mb-4 p-3 bg-discord-dark rounded-lg">
+                        <p class="text-xs text-gray-500 mb-1">Preview:</p>
+                        <p class="text-white">"Mario" → "<span x-text="previewTransform('Mario')"></span>"</p>
+                    </div>
+                    
+                    <button @click="addCustomChannel()"
+                            :disabled="!newCustomChannelId.trim() || !newCustomChannelName.trim() || newCustomRules.length === 0"
+                            class="px-4 py-2 bg-discord-blurple hover:bg-opacity-80 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors">
+                        Add Custom Channel
+                    </button>
+                </div>
+                
+                <!-- Custom channel list -->
+                <div x-show="customChannels.length > 0" class="space-y-3">
+                    <template x-for="channel in customChannels" :key="channel.id">
+                        <div class="bg-discord-darker rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <div>
+                                    <span class="text-white font-medium" x-text="channel.channel_name"></span>
+                                    <span class="text-xs text-gray-500 ml-2" x-text="'#' + channel.channel_id"></span>
+                                </div>
+                                <button @click="deleteCustomChannel(channel.id)"
+                                        class="text-gray-500 hover:text-discord-red transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap gap-1">
+                                <template x-for="rule in channel.rules" :key="rule.type">
+                                    <span class="px-2 py-1 bg-discord-blurple/30 text-discord-blurple rounded text-xs"
+                                          x-text="rule.value ? rule.type + ': ' + rule.value : rule.type">
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Empty state -->
+                <div x-show="customChannels.length === 0" class="text-center py-8 text-gray-500">
+                    <p>No custom channels. Add one to apply special transformations!</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -187,12 +282,19 @@ function guildSettings(guildId) {
         newNickname: '',
         newChannelId: '',
         newChannelName: '',
+		customChannels: [],
+        availableRules: [],
+        newCustomChannelId: '',
+        newCustomChannelName: '',
+        newCustomRules: [],
         
         async init() {
             await Promise.all([
                 this.loadGuild(),
                 this.loadNicknames(),
-                this.loadExcludedChannels()
+                this.loadExcludedChannels(),
+                this.loadCustomChannels(),
+                this.loadAvailableRules()
             ]);
             this.loading = false;
         },
@@ -314,6 +416,112 @@ function guildSettings(guildId) {
                 this.toast('Channel removed from exclusions!', 'success');
             } else {
                 this.toast('Failed to remove channel', 'error');
+            }
+        },
+
+		async loadCustomChannels() {
+            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels`);
+            if (response.ok) {
+                const data = await response.json();
+                this.customChannels = data.channels;
+            }
+        },
+        
+        async loadAvailableRules() {
+            const response = await fetch('/api/available-rules');
+            if (response.ok) {
+                const data = await response.json();
+                this.availableRules = data.rules;
+            }
+        },
+        
+        toggleNewRule(rule) {
+            const index = this.newCustomRules.findIndex(r => r.type === rule.type);
+            if (index >= 0) {
+                this.newCustomRules.splice(index, 1);
+            } else {
+                this.newCustomRules.push({
+                    type: rule.type,
+                    has_value: rule.has_value,
+                    value: ''
+                });
+            }
+        },
+        
+        isRuleSelected(ruleType) {
+            return this.newCustomRules.some(r => r.type === ruleType);
+        },
+        
+        previewTransform(name) {
+            let result = name;
+            for (const rule of this.newCustomRules) {
+                result = this.applyRule(result, rule);
+            }
+            return result;
+        },
+        
+        applyRule(text, rule) {
+            switch (rule.type) {
+                case 'reverse':
+                    return text.split('').reverse().join('');
+                case 'uppercase':
+                    return text.toUpperCase();
+                case 'lowercase':
+                    return text.toLowerCase();
+                case 'sarcastic':
+                    return text.split('').map((c, i) => i % 2 ? c.toUpperCase() : c.toLowerCase()).join('');
+                case 'leetspeak':
+                    return text.replace(/[aeiostl]/gi, c => ({a:'4',e:'3',i:'1',o:'0',s:'$',t:'7',l:'1'}[c.toLowerCase()] || c));
+                case 'prefix':
+                    return rule.value ? `${rule.value} ${text}` : text;
+                case 'suffix':
+                    return rule.value ? `${text} ${rule.value}` : text;
+                case 'upside_down':
+                    const upsideDown = {'a':'ɐ','b':'q','c':'ɔ','d':'p','e':'ǝ','f':'ɟ','g':'ƃ','h':'ɥ','i':'ᴉ','j':'ɾ','k':'ʞ','l':'l','m':'ɯ','n':'u','o':'o','p':'d','q':'b','r':'ɹ','s':'s','t':'ʇ','u':'n','v':'ʌ','w':'ʍ','x':'x','y':'ʎ','z':'z'};
+                    return text.toLowerCase().split('').map(c => upsideDown[c] || c).reverse().join('');
+                case 'mirror':
+                    return text.split('').reverse().join('');
+                default:
+                    return text;
+            }
+        },
+        
+        async addCustomChannel() {
+            if (!this.newCustomChannelId.trim() || !this.newCustomChannelName.trim() || this.newCustomRules.length === 0) return;
+            
+            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel_id: this.newCustomChannelId.trim(),
+                    channel_name: this.newCustomChannelName.trim(),
+                    rules: this.newCustomRules.map(r => ({ type: r.type, value: r.value || null }))
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.customChannels.push(data);
+                this.newCustomChannelId = '';
+                this.newCustomChannelName = '';
+                this.newCustomRules = [];
+                this.toast('Custom channel added!', 'success');
+            } else {
+                const error = await response.json();
+                this.toast(error.detail || 'Failed to add custom channel', 'error');
+            }
+        },
+        
+        async deleteCustomChannel(id) {
+            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.customChannels = this.customChannels.filter(c => c.id !== id);
+                this.toast('Custom channel deleted!', 'success');
+            } else {
+                this.toast('Failed to delete custom channel', 'error');
             }
         },
         

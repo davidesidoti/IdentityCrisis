@@ -11,7 +11,7 @@ import discord
 from discord.ext import commands
 from sqlalchemy import select
 
-from bot.data import DEFAULT_NICKNAMES
+from bot.data import DEFAULT_NICKNAMES, apply_rules
 from shared import ExcludedChannel, Guild, Nickname, get_db
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,24 @@ class VoiceHandler(commands.Cog):
                 )
             )
             return result.scalar_one_or_none() is not None
+        
+    async def _get_custom_channel_rules(self, guild_id: int, channel_id: int) -> list[dict] | None:
+        """Get custom rules for a channel, if any."""
+        from shared import CustomChannel
+        
+        db = get_db()
+        async with db.async_session() as session:
+            result = await session.execute(
+                select(CustomChannel).where(
+                    CustomChannel.guild_id == guild_id,
+                    CustomChannel.channel_id == channel_id
+                )
+            )
+            custom_channel = result.scalar_one_or_none()
+            
+            if custom_channel and custom_channel.rules:
+                return custom_channel.rules
+            return None
     
     async def _ensure_guild_exists(self, guild: discord.Guild) -> Guild:
         """Ensure guild exists in database, create if not."""
@@ -236,9 +254,21 @@ class VoiceHandler(commands.Cog):
                 member.nick
             )
             
-            # Get nicknames and assign chaos
-            nicknames = await self._get_guild_nicknames(member.guild.id)
-            new_nickname = random.choice(nicknames)
+            # Check for custom channel rules first
+            custom_rules = await self._get_custom_channel_rules(
+                member.guild.id, 
+                after.channel.id
+            )
+            
+            if custom_rules:
+                # Apply transformation rules to the user's current display name
+                original_name = member.nick or member.display_name
+                new_nickname = apply_rules(original_name, custom_rules)
+            else:
+                # Standard random nickname
+                nicknames = await self._get_guild_nicknames(member.guild.id)
+                new_nickname = random.choice(nicknames)
+            
             await self._change_nickname(member, new_nickname)
         
         # User left voice entirely

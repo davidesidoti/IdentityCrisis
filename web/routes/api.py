@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 
-from shared import ExcludedChannel, Guild, Nickname, UserSession, get_db
+from shared import ExcludedChannel, Guild, Nickname, UserSession, CustomChannel, get_db
 from web.discord_oauth import DiscordOAuth
 from web.routes.dependencies import get_current_user
 
@@ -31,6 +31,21 @@ class NicknameCreate(BaseModel):
 class ExcludedChannelCreate(BaseModel):
     channel_id: str
     channel_name: str
+    
+
+class RuleCreate(BaseModel):
+    type: str
+    value: Optional[str] = None
+
+
+class CustomChannelCreate(BaseModel):
+    channel_id: str
+    channel_name: str
+    rules: list[RuleCreate] = []
+
+
+class CustomChannelUpdate(BaseModel):
+    rules: list[RuleCreate]
 
 
 class MessageResponse(BaseModel):
@@ -280,3 +295,130 @@ async def remove_excluded_channel(
             raise HTTPException(status_code=404, detail="Channel not found")
         
         return {"message": "Channel removed from exclusion list"}
+
+
+# Custom Channels with Rules
+@router.get("/guilds/{guild_id}/custom-channels")
+async def get_custom_channels(
+    guild_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Get all custom channels for a guild."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            select(CustomChannel).where(CustomChannel.guild_id == guild_id)
+        )
+        channels = result.scalars().all()
+        
+        return {
+            "channels": [
+                {
+                    "id": c.id,
+                    "channel_id": str(c.channel_id),
+                    "channel_name": c.channel_name,
+                    "rules": c.rules or [],
+                }
+                for c in channels
+            ]
+        }
+
+
+@router.post("/guilds/{guild_id}/custom-channels")
+async def add_custom_channel(
+    guild_id: int,
+    data: CustomChannelCreate,
+    user: UserSession = Depends(get_current_user)
+):
+    """Add a custom channel with rules."""
+    db = get_db()
+    async with db.async_session() as session:
+        # Check if already exists
+        result = await session.execute(
+            select(CustomChannel).where(
+                CustomChannel.guild_id == guild_id,
+                CustomChannel.channel_id == int(data.channel_id)
+            )
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Channel already has custom rules")
+        
+        channel = CustomChannel(
+            guild_id=guild_id,
+            channel_id=int(data.channel_id),
+            channel_name=data.channel_name,
+            rules=[{"type": r.type, "value": r.value} for r in data.rules],
+        )
+        session.add(channel)
+        await session.commit()
+        await session.refresh(channel)
+        
+        return {
+            "id": channel.id,
+            "channel_id": str(channel.channel_id),
+            "channel_name": channel.channel_name,
+            "rules": channel.rules,
+        }
+
+
+@router.patch("/guilds/{guild_id}/custom-channels/{channel_db_id}")
+async def update_custom_channel(
+    guild_id: int,
+    channel_db_id: int,
+    data: CustomChannelUpdate,
+    user: UserSession = Depends(get_current_user)
+):
+    """Update rules for a custom channel."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            select(CustomChannel).where(
+                CustomChannel.id == channel_db_id,
+                CustomChannel.guild_id == guild_id
+            )
+        )
+        channel = result.scalar_one_or_none()
+        
+        if not channel:
+            raise HTTPException(status_code=404, detail="Custom channel not found")
+        
+        channel.rules = [{"type": r.type, "value": r.value} for r in data.rules]
+        await session.commit()
+        
+        return {"message": "Rules updated"}
+
+
+@router.delete("/guilds/{guild_id}/custom-channels/{channel_db_id}")
+async def delete_custom_channel(
+    guild_id: int,
+    channel_db_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Delete a custom channel."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            delete(CustomChannel).where(
+                CustomChannel.id == channel_db_id,
+                CustomChannel.guild_id == guild_id
+            )
+        )
+        await session.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Custom channel not found")
+        
+        return {"message": "Custom channel deleted"}
+
+
+@router.get("/available-rules")
+async def get_available_rules():
+    """Get list of available transformation rules."""
+    from bot.data import TRANSFORMER_NAMES
+    
+    return {
+        "rules": [
+            {"type": key, "name": name, "has_value": key in ["prefix", "suffix"]}
+            for key, name in TRANSFORMER_NAMES.items()
+        ]
+    }

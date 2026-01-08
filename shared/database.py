@@ -6,7 +6,7 @@ Uses SQLAlchemy async with PostgreSQL.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, JSON, func
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -49,6 +49,10 @@ class Guild(Base):
         back_populates="guild",
         cascade="all, delete-orphan"
     )
+    custom_channels: Mapped[list["CustomChannel"]] = relationship(
+        back_populates="guild",
+        cascade="all, delete-orphan"
+    )
 
 
 class Nickname(Base):
@@ -74,6 +78,21 @@ class ExcludedChannel(Base):
     
     # Relationship
     guild: Mapped["Guild"] = relationship(back_populates="excluded_channels")
+    
+
+class CustomChannel(Base):
+    """Voice channels with custom nickname rules."""
+    __tablename__ = "custom_channels"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"))
+    channel_id: Mapped[int] = mapped_column(BigInteger)
+    channel_name: Mapped[str] = mapped_column(String(100))
+    # Rules stored as JSON array, e.g. [{"type": "reverse"}, {"type": "prefix", "value": "[AFK]"}]
+    rules: Mapped[list] = mapped_column(JSON, default=list)
+    
+    # Relationship
+    guild: Mapped["Guild"] = relationship(back_populates="custom_channels")
 
 
 class UserSession(Base):
