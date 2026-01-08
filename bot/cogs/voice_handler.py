@@ -103,23 +103,42 @@ class VoiceHandler(commands.Cog):
         self, 
         guild_id: int, 
         user_id: int, 
-        nickname: Optional[str]
+        nickname: Optional[str],
+        display_name: str
     ) -> None:
-        """Store the original nickname before changing it."""
+        """Store the original nickname and display name before changing it."""
         if guild_id not in self.original_nicknames:
             self.original_nicknames[guild_id] = {}
         
         if user_id not in self.original_nicknames[guild_id]:
-            self.original_nicknames[guild_id][user_id] = nickname
+            # Store both: nick for restoring, display_name for transformations
+            self.original_nicknames[guild_id][user_id] = {
+                "nick": nickname,  # Can be None, used for restoring
+                "display_name": display_name  # Used for transformations
+            }
     
     def _pop_original_nickname(
         self, 
         guild_id: int, 
         user_id: int
     ) -> Optional[str]:
-        """Retrieve and remove the stored original nickname."""
+        """Retrieve and remove the stored original nickname for restoring."""
         if guild_id in self.original_nicknames:
-            return self.original_nicknames[guild_id].pop(user_id, None)
+            data = self.original_nicknames[guild_id].pop(user_id, None)
+            if data:
+                return data["nick"]
+        return None
+    
+    def _get_original_display_name(
+        self,
+        guild_id: int,
+        user_id: int
+    ) -> Optional[str]:
+        """Get the stored original display name for transformations."""
+        if guild_id in self.original_nicknames:
+            data = self.original_nicknames[guild_id].get(user_id)
+            if data:
+                return data["display_name"]
         return None
     
     async def _change_nickname(
@@ -268,7 +287,8 @@ class VoiceHandler(commands.Cog):
                 self._store_original_nickname(
                     member.guild.id, 
                     member.id, 
-                    member.nick
+                    member.nick,
+                    member.display_name  # Server nick if set, otherwise global name
                 )
             
             # Check for custom channel rules first
@@ -278,9 +298,10 @@ class VoiceHandler(commands.Cog):
             )
             
             if custom_rules:
-                # Apply transformation rules to the user's ORIGINAL name (not current nick)
-                original = self.original_nicknames.get(member.guild.id, {}).get(member.id)
-                original_name = original if original else member.name
+                # Apply transformation rules to the user's ORIGINAL display name
+                original_name = self._get_original_display_name(member.guild.id, member.id)
+                if not original_name:
+                    original_name = member.display_name
                 new_nickname = apply_rules(original_name, custom_rules)
             else:
                 # Standard random nickname
