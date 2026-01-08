@@ -108,7 +108,21 @@ class VoiceHandler(commands.Cog):
             if custom_channel and custom_channel.rules:
                 return custom_channel.rules
             return None
-    
+        
+    async def _is_custom_channel(self, guild_id: int, channel_id: int) -> bool:
+        """Check if a channel has custom rules."""
+        from shared import CustomChannel
+        
+        db = get_db()
+        async with db.async_session() as session:
+            result = await session.execute(
+                select(CustomChannel).where(
+                    CustomChannel.guild_id == guild_id,
+                    CustomChannel.channel_id == channel_id
+                )
+            )
+            return result.scalar_one_or_none() is not None
+
     async def _ensure_guild_exists(self, guild: discord.Guild) -> Guild:
         """Ensure guild exists in database, create if not."""
         db = get_db()
@@ -295,13 +309,30 @@ class VoiceHandler(commands.Cog):
         if not guild_settings.enabled:
             return
         
+        # Check if leaving a custom channel (always restore, regardless of settings)
+        if before.channel is not None:
+            was_custom_channel = await self._is_custom_channel(member.guild.id, before.channel.id)
+        else:
+            was_custom_channel = False
+        
+        # User left voice entirely
+        if self._user_left_voice(before, after):
+            # Always restore if leaving custom channel, or if restore_on_leave is enabled
+            if was_custom_channel or guild_settings.restore_on_leave:
+                await self._restore_nickname(member)
+            return
+        
         # User joined a voice channel OR changed channel
         if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
-            # Check if channel is allowed (whitelist logic)
+            # If leaving a custom channel, restore first
+            if was_custom_channel and self._user_changed_channel(before, after):
+                await self._restore_nickname(member)
+            
+            # Check if new channel is allowed (whitelist logic)
             if not await self._is_channel_allowed(member.guild.id, after.channel.id):
                 # If changing from an allowed channel to a non-allowed one, restore nickname
                 if self._user_changed_channel(before, after):
-                    if guild_settings.restore_on_leave:
+                    if guild_settings.restore_on_leave and not was_custom_channel:
                         await self._restore_nickname(member)
                 return
             
@@ -320,7 +351,7 @@ class VoiceHandler(commands.Cog):
                     member.guild.id, 
                     member.id, 
                     member.nick,
-                    member.display_name  # Server nick if set, otherwise global name
+                    member.display_name
                 )
             
             # Check for custom channel rules first
@@ -341,11 +372,6 @@ class VoiceHandler(commands.Cog):
                 new_nickname = random.choice(nicknames)
             
             await self._change_nickname(member, new_nickname)
-        
-        # User left voice entirely
-        elif self._user_left_voice(before, after):
-            if guild_settings.restore_on_leave:
-                await self._restore_nickname(member)
 
 
 async def setup(bot: commands.Bot) -> None:
