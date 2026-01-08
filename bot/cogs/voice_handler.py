@@ -50,25 +50,46 @@ class VoiceHandler(commands.Cog):
     async def _is_channel_allowed(self, guild_id: int, channel_id: int) -> bool:
         """
         Check if the bot is allowed to work in this channel.
-        - If no included channels are set: ALL channels are allowed
-        - If included channels are set: ONLY those channels are allowed
+        - If no included channels AND no custom channels: ALL channels are allowed
+        - If included channels or custom channels exist: ONLY those channels are allowed
+        - Custom channels are always implicitly included
         """
-        from shared import IncludedChannel
+        from shared import IncludedChannel, CustomChannel
         
         db = get_db()
         async with db.async_session() as session:
-            # First check if there are ANY included channels for this guild
+            # Check if this is a custom channel (always allowed)
+            result = await session.execute(
+                select(CustomChannel).where(
+                    CustomChannel.guild_id == guild_id,
+                    CustomChannel.channel_id == channel_id
+                )
+            )
+            if result.scalar_one_or_none():
+                return True
+            
+            # Get included channels
             result = await session.execute(
                 select(IncludedChannel).where(IncludedChannel.guild_id == guild_id)
             )
             included_channels = result.scalars().all()
             
-            # If no included channels are set, all channels are allowed
-            if not included_channels:
+            # Get custom channels (to check if any exist)
+            result = await session.execute(
+                select(CustomChannel).where(CustomChannel.guild_id == guild_id)
+            )
+            custom_channels = result.scalars().all()
+            
+            # If no included channels AND no custom channels, all channels are allowed
+            if not included_channels and not custom_channels:
                 return True
             
-            # If included channels exist, check if this channel is in the list
-            return any(ch.channel_id == channel_id for ch in included_channels)
+            # If we have included channels, check if this channel is in the list
+            if included_channels:
+                return any(ch.channel_id == channel_id for ch in included_channels)
+            
+            # If we only have custom channels (but this isn't one of them), not allowed
+            return False
         
     async def _get_custom_channel_rules(self, guild_id: int, channel_id: int) -> list[dict] | None:
         """Get custom rules for a channel, if any."""
