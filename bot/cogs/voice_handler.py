@@ -177,6 +177,18 @@ class VoiceHandler(commands.Cog):
                 return data["display_name"]
         return None
     
+    def _get_original_nickname(
+        self, 
+        guild_id: int, 
+        user_id: int
+    ) -> Optional[str]:
+        """Get the stored original display name WITHOUT removing it."""
+        if guild_id in self.original_nicknames:
+            data = self.original_nicknames[guild_id].get(user_id)
+            if data:
+                return data["display_name"]
+        return None
+    
     def _get_original_display_name(
         self,
         guild_id: int,
@@ -222,6 +234,28 @@ class VoiceHandler(commands.Cog):
                 logger.info(
                     f"Restored nickname for {member.name} to '{original}' "
                     f"in {member.guild.name}"
+                )
+                return True
+            except discord.Forbidden:
+                logger.warning(
+                    f"Cannot restore nickname for {member.name}: Missing permissions"
+                )
+                return False
+            except discord.HTTPException as e:
+                logger.error(f"HTTP error restoring nickname: {e}")
+                return False
+        return False
+    
+    async def _restore_nickname_keep_data(self, member: discord.Member) -> bool:
+        """Restore a member's original nickname WITHOUT removing stored data."""
+        original = self._get_original_nickname(member.guild.id, member.id)
+        
+        if original is not None:
+            try:
+                await member.edit(nick=original)
+                logger.info(
+                    f"Restored nickname for {member.name} to '{original}' "
+                    f"in {member.guild.name} (keeping data)"
                 )
                 return True
             except discord.Forbidden:
@@ -326,16 +360,16 @@ class VoiceHandler(commands.Cog):
         
         # User joined a voice channel OR changed channel
         if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
-            # If leaving a custom channel, restore first
+            # If leaving a custom channel, restore first (but keep data for future use)
             if was_custom_channel and self._user_changed_channel(before, after):
-                await self._restore_nickname(member)
+                await self._restore_nickname_keep_data(member)
             
             # Check if new channel is allowed (whitelist logic)
             if not await self._is_channel_allowed(member.guild.id, after.channel.id):
                 # If changing from an allowed channel to a non-allowed one, restore nickname
                 if self._user_changed_channel(before, after):
                     if guild_settings.restore_on_leave and not was_custom_channel:
-                        await self._restore_nickname(member)
+                        await self._restore_nickname_keep_data(member)
                 return
             
             if not self._can_rename_member(member):
