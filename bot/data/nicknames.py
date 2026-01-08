@@ -14,7 +14,7 @@ DEFAULT_NICKNAMES: list[str] = [
     "Signor Broccolo",
     "Zio Mortazza",
     "Nonna Furiosa",
-
+    
     # English Absurdity
     "Captain Spaghetti",
     "Lord Farquaad's Cousin",
@@ -26,7 +26,7 @@ DEFAULT_NICKNAMES: list[str] = [
     "FBI Agent #47",
     "Your WiFi Password",
     "404 Name Not Found",
-
+    
     # Just Names (cursed)
     "Kevin",
     "Greg",
@@ -35,7 +35,7 @@ DEFAULT_NICKNAMES: list[str] = [
     "Nigel",
     "Gertrude",
     "Cletus",
-
+    
     # Existential Crisis
     "Who Am I",
     "Not Marco",
@@ -44,14 +44,14 @@ DEFAULT_NICKNAMES: list[str] = [
     "Your Other Account",
     "The Impostor",
     "Witness Protection",
-
+    
     # Food-based Identities
     "Human Lasagna",
     "Angry Mozzarella",
     "Escaped Raviolo",
     "Carbonara Incarnata",
     "Panino Imbottito",
-
+    
     # Absurd Titles
     "CEO of Nothing",
     "Professional Screamer",
@@ -61,7 +61,7 @@ DEFAULT_NICKNAMES: list[str] = [
     "The Quiet One (lol)",
     "Main Character",
     "Background NPC",
-
+    
     # Italian-English Fusion
     "Ciao Bella Problems",
     "Molto Confused",

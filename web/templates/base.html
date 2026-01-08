@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}IdentityCrisis{% endblock %}</title>
+    
+    <!-- TailwindCSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        discord: {
+                            dark: '#1e1f22',
+                            darker: '#111214',
+                            light: '#2b2d31',
+                            blurple: '#5865f2',
+                            green: '#57f287',
+                            yellow: '#fee75c',
+                            fuchsia: '#eb459e',
+                            red: '#ed4245',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-discord-darker text-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-discord-dark border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center space-x-3">
+                        <span class="text-2xl">🎭</span>
+                        <span class="text-xl font-bold text-white">IdentityCrisis</span>
+                    </a>
+                </div>
+                
+                <!-- Navigation links -->
+                <div class="flex items-center space-x-4">
+                    {% if user %}
+                        <a href="/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            Dashboard
+                        </a>
+                        <div class="flex items-center space-x-3">
+                            {% if user.avatar_url %}
+                                <img src="{{ user.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">
+                            {% else %}
+                                <div class="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center">
+                                    {{ user.username[0].upper() }}
+                                </div>
+                            {% endif %}
+                            <span class="text-sm text-gray-300">{{ user.username }}</span>
+                            <a href="/auth/logout" class="text-gray-400 hover:text-white text-sm">
+                                Logout
+                            </a>
+                        </div>
+                    {% else %}
+                        <a href="/auth/login" class="bg-discord-blurple hover:bg-opacity-80 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Login with Discord
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main content -->
+    <main class="min-h-[calc(100vh-4rem)]">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Toast notifications -->
+    <div x-data="{ toasts: [] }" 
+         x-on:toast.window="toasts.push($event.detail); setTimeout(() => toasts.shift(), 3000)"
+         class="fixed bottom-4 right-4 z-50 space-y-2">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="true"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-8"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 :class="toast.type === 'error' ? 'bg-discord-red' : 'bg-discord-green'"
+                 class="px-4 py-3 rounded-lg shadow-lg text-white text-sm">
+                <span x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
