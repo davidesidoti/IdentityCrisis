@@ -168,11 +168,13 @@ class VoiceHandler(commands.Cog):
         guild_id: int, 
         user_id: int
     ) -> Optional[str]:
-        """Retrieve and remove the stored original nickname for restoring."""
+        """Retrieve and remove the stored original display name for restoring."""
         if guild_id in self.original_nicknames:
             data = self.original_nicknames[guild_id].pop(user_id, None)
             if data:
-                return data["nick"]
+                # Return display_name (server nick if existed, otherwise username)
+                # This ensures we restore to what they had before, not None
+                return data["display_name"]
         return None
     
     def _get_original_display_name(
