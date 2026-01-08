@@ -29,7 +29,7 @@ class NicknameCreate(BaseModel):
 
 
 class ExcludedChannelCreate(BaseModel):
-    channel_id: int
+    channel_id: str
     channel_name: str
 
 
@@ -237,7 +237,7 @@ async def add_excluded_channel(
         result = await session.execute(
             select(ExcludedChannel).where(
                 ExcludedChannel.guild_id == guild_id,
-                ExcludedChannel.channel_id == data.channel_id
+                ExcludedChannel.channel_id == int(data.channel_id)
             )
         )
         if result.scalar_one_or_none():
@@ -245,7 +245,7 @@ async def add_excluded_channel(
         
         channel = ExcludedChannel(
             guild_id=guild_id,
-            channel_id=data.channel_id,
+            channel_id=int(data.channel_id),
             channel_name=data.channel_name,
         )
         session.add(channel)

@@ -287,7 +287,7 @@ function guildSettings(guildId) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    channel_id: parseInt(this.newChannelId), 
+                    channel_id: this.newChannelId.trim(), 
                     channel_name: this.newChannelName.trim() 
                 })
             });
