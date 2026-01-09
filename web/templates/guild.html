@@ -107,9 +107,9 @@
                                             class="px-3 py-2 bg-discord-blurple hover:bg-opacity-80 rounded-lg text-white text-sm font-medium transition-colors">
                                         Save
                                     </button>
-                                    <button @click="setMemberAuto(member)"
-                                            class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-white text-sm font-medium transition-colors">
-                                        Auto
+                                    <button @click="removeMemberNickname(member)"
+                                            class="px-3 py-2 bg-discord-red hover:bg-opacity-80 rounded-lg text-white text-sm font-medium transition-colors">
+                                        Remove
                                     </button>
                                 </div>
                             </div>
@@ -512,29 +512,18 @@ function guildSettings(guildId) {
             }
         },
 
-        async setMemberAuto(member) {
+        async removeMemberNickname(member) {
             const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reset_nickname: null,
-                    manual: false
-                })
+                method: 'DELETE'
             });
 
             if (response.ok) {
-                const data = await response.json();
-                member.reset_nickname = data.reset_nickname;
-                member.reset_nickname_manual = data.reset_nickname_manual;
-                member.reset_nickname_input = data.reset_nickname || '';
-                if (!data.applied) {
-                    this.toast('Auto set, but failed to apply immediately', 'error');
-                } else {
-                    this.toast('Auto reset enabled', 'success');
-                }
+                this.memberNicknames = this.memberNicknames.filter(m => m.user_id !== member.user_id);
+                this.memberTotal = Math.max(0, this.memberTotal - 1);
+                this.toast('Member entry removed', 'success');
             } else {
                 const error = await response.json();
-                this.toast(error.detail || 'Failed to enable auto reset', 'error');
+                this.toast(error.detail || 'Failed to remove member entry', 'error');
             }
         },
 

@@ -369,6 +369,29 @@ async def update_member_nickname(
         }
 
 
+@router.delete("/guilds/{guild_id}/member-nicknames/{member_id}")
+async def delete_member_nickname(
+    guild_id: int,
+    member_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Delete a member's reset nickname entry."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            delete(MemberNickname).where(
+                MemberNickname.guild_id == guild_id,
+                MemberNickname.user_id == member_id
+            )
+        )
+        await session.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        return {"message": "Member nickname removed"}
+
+
 # Included Channels (whitelist)
 @router.get("/guilds/{guild_id}/included-channels")
 async def get_included_channels(
