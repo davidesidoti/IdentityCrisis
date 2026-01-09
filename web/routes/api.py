@@ -4,6 +4,7 @@ API routes for guild and nickname management.
 
 from collections import deque
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -30,6 +31,26 @@ MAX_LOG_LINES = 1000
 def _is_log_viewer(user: UserSession) -> bool:
     config = get_config()
     return bool(config.log_viewer_id and user.discord_id == config.log_viewer_id)
+
+
+def _truncate_log_file(log_path: str) -> None:
+    root_logger = logging.getLogger()
+    log_path_abs = os.path.abspath(log_path)
+    for handler in root_logger.handlers:
+        if isinstance(handler, RotatingFileHandler) and handler.baseFilename == log_path_abs:
+            handler.acquire()
+            try:
+                if handler.stream:
+                    handler.stream.close()
+                with open(log_path, "w", encoding="utf-8"):
+                    pass
+                handler.stream = handler._open()
+            finally:
+                handler.release()
+            return
+
+    with open(log_path, "w", encoding="utf-8"):
+        pass
 
 
 # Pydantic models for request/response
@@ -448,6 +469,27 @@ async def get_logs(
         "line_count": len(tail),
         "last_modified": last_modified,
     }
+
+
+@router.delete("/logs")
+async def clear_logs(
+    user: UserSession = Depends(get_current_user)
+):
+    """Clear the log file (restricted)."""
+    if not _is_log_viewer(user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    log_path = get_config().log_file_path
+    if not log_path:
+        raise HTTPException(status_code=404, detail="Log file not configured")
+
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    _truncate_log_file(log_path)
+    logger.debug("Logs cleared by %s", user.discord_id)
+    return {"message": "Logs cleared"}
 
 
 # Included Channels (whitelist)

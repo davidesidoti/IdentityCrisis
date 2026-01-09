@@ -16,6 +16,11 @@
                     class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors">
                 Refresh
             </button>
+            <button @click="clearLogs()"
+                    :disabled="loading"
+                    class="px-3 py-1.5 bg-discord-red hover:bg-opacity-80 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors">
+                Clear
+            </button>
         </div>
     </div>
 
@@ -52,6 +57,20 @@ function logViewer() {
                 this.lastUpdated = new Date().toLocaleTimeString();
             } else {
                 this.logs = ['Failed to load logs.'];
+            }
+            this.loading = false;
+        },
+
+        async clearLogs() {
+            if (this.loading) return;
+            if (!confirm('Clear all logs?')) return;
+            this.loading = true;
+            const response = await fetch('/api/logs', { method: 'DELETE' });
+            if (response.ok) {
+                this.logs = [];
+                this.lastUpdated = new Date().toLocaleTimeString();
+            } else {
+                this.logs = ['Failed to clear logs.'];
             }
             this.loading = false;
         }
