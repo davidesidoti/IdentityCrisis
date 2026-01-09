@@ -417,6 +417,13 @@ function guildSettings(guildId) {
             }
             this.memberLoading = false;
         },
+
+        async refreshMemberNicknames() {
+            await this.loadMemberNicknames(this.memberPage);
+            if (this.memberPage > this.memberPageCount()) {
+                await this.loadMemberNicknames(this.memberPageCount());
+            }
+        },
         
         async loadIncludedChannels() {
             const response = await fetch(`/api/guilds/${this.guildId}/included-channels`);
@@ -506,6 +513,7 @@ function guildSettings(guildId) {
                 } else {
                     this.toast('Member reset nickname updated', 'success');
                 }
+                await this.refreshMemberNicknames();
             } else {
                 const error = await response.json();
                 this.toast(error.detail || 'Failed to update member nickname', 'error');
@@ -518,9 +526,8 @@ function guildSettings(guildId) {
             });
 
             if (response.ok) {
-                this.memberNicknames = this.memberNicknames.filter(m => m.user_id !== member.user_id);
-                this.memberTotal = Math.max(0, this.memberTotal - 1);
                 this.toast('Member entry removed', 'success');
+                await this.refreshMemberNicknames();
             } else {
                 const error = await response.json();
                 this.toast(error.detail || 'Failed to remove member entry', 'error');
