@@ -362,6 +362,7 @@ function guildSettings(guildId) {
         memberTotal: 0,
         memberStaleDays: 30,
         memberLoading: false,
+        memberRefreshHandle: null,
         loading: true,
         newNickname: '',
         newChannelId: '',
@@ -382,6 +383,16 @@ function guildSettings(guildId) {
                 this.loadAvailableRules()
             ]);
             this.loading = false;
+            this.memberRefreshHandle = setInterval(() => {
+                if (document.visibilityState === 'visible' && !this.memberLoading) {
+                    this.refreshMemberNicknames();
+                }
+            }, 30000);
+            window.addEventListener('beforeunload', () => {
+                if (this.memberRefreshHandle) {
+                    clearInterval(this.memberRefreshHandle);
+                }
+            });
         },
         
         async loadGuild() {
