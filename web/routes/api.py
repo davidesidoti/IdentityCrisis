@@ -2,7 +2,9 @@
 API routes for guild and nickname management.
 """
 
+from collections import deque
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -21,6 +23,13 @@ router = APIRouter(prefix="/api", tags=["api"])
 STALE_MEMBER_DAYS = 30
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
+DEFAULT_LOG_LINES = 200
+MAX_LOG_LINES = 1000
+
+
+def _is_log_viewer(user: UserSession) -> bool:
+    config = get_config()
+    return bool(config.log_viewer_id and user.discord_id == config.log_viewer_id)
 
 
 # Pydantic models for request/response
@@ -347,6 +356,15 @@ async def update_member_nickname(
 
         await session.commit()
 
+        logger.debug(
+            "Member nickname updated by %s in guild %s for member %s (reset=%r, manual=%s)",
+            user.discord_id,
+            guild_id,
+            member_id,
+            member.reset_nickname,
+            member.reset_nickname_manual,
+        )
+
         applied, error = await _apply_member_nickname(
             guild_id,
             member_id,
@@ -389,7 +407,47 @@ async def delete_member_nickname(
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Member not found")
 
+        logger.debug(
+            "Member nickname removed by %s in guild %s for member %s",
+            user.discord_id,
+            guild_id,
+            member_id,
+        )
+
         return {"message": "Member nickname removed"}
+
+
+@router.get("/logs")
+async def get_logs(
+    lines: int = DEFAULT_LOG_LINES,
+    user: UserSession = Depends(get_current_user)
+):
+    """Get recent bot logs (restricted)."""
+    if not _is_log_viewer(user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if lines < 1 or lines > MAX_LOG_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lines must be between 1 and {MAX_LOG_LINES}"
+        )
+
+    log_path = get_config().log_file_path
+    if not log_path or not os.path.exists(log_path):
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    with open(log_path, "r", encoding="utf-8", errors="replace") as handle:
+        tail = deque(handle, maxlen=lines)
+
+    last_modified = datetime.fromtimestamp(
+        os.path.getmtime(log_path),
+        tz=timezone.utc
+    ).isoformat()
+
+    return {
+        "lines": [line.rstrip("\n") for line in tail],
+        "line_count": len(tail),
+        "last_modified": last_modified,
+    }
 
 
 # Included Channels (whitelist)

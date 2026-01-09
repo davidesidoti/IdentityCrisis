@@ -152,6 +152,9 @@ This starts both the Discord bot and the web dashboard. Access the dashboard at 
 | `WEB_HOST` | No | Web server host (default: `0.0.0.0`) |
 | `WEB_PORT` | No | Web server port (default: `8000`) |
 | `BASE_URL` | No | Public URL of the dashboard |
+| `LOG_FILE_PATH` | No | Log file path (default: `logs/identitycrisis.log`) |
+| `LOG_LEVEL` | No | Log level (default: `INFO`) |
+| `LOG_VIEWER_ID` | No | Discord user ID allowed to view logs page |
 
 ## Deployment
 

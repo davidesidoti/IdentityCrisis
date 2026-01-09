@@ -159,6 +159,7 @@ class VoiceHandler(commands.Cog):
             )
             record = result.scalar_one_or_none()
 
+            created = record is None
             if record is None:
                 record = MemberNickname(
                     guild_id=member.guild.id,
@@ -180,6 +181,17 @@ class VoiceHandler(commands.Cog):
                     record.reset_nickname = member.nick
 
             await session.commit()
+            logger.debug(
+                "Upserted member nickname for %s in guild %s (created=%s, display_name=%r, "
+                "last_seen_nick=%r, reset_nickname=%r, manual=%s)",
+                member.id,
+                member.guild.id,
+                created,
+                record.display_name,
+                record.last_seen_nick,
+                record.reset_nickname,
+                record.reset_nickname_manual,
+            )
     
     def _store_original_nickname(
         self, 
@@ -463,8 +475,27 @@ class VoiceHandler(commands.Cog):
                 # Apply transformation rules to the user's ORIGINAL display name
                 original_name = self._get_original_display_name(member.guild.id, member.id)
                 if not original_name:
+                    logger.debug(
+                        "Missing stored original display name for %s in guild %s, "
+                        "falling back to current display_name",
+                        member.id,
+                        member.guild.id,
+                    )
                     original_name = member.display_name
+                logger.debug(
+                    "Applying custom rules for %s in guild %s (base_name=%r, rules=%s)",
+                    member.id,
+                    member.guild.id,
+                    original_name,
+                    custom_rules,
+                )
                 new_nickname = apply_rules(original_name, custom_rules)
+                logger.debug(
+                    "Custom rules result for %s in guild %s: %r",
+                    member.id,
+                    member.guild.id,
+                    new_nickname,
+                )
             else:
                 # Standard random nickname
                 nicknames = await self._get_guild_nicknames(member.guild.id)

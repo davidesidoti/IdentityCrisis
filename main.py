@@ -6,8 +6,10 @@ Main entry point for running both services.
 
 import asyncio
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 
 import uvicorn
 from dotenv import load_dotenv
@@ -17,15 +19,30 @@ from shared import init_database, load_config
 from web import create_app
 
 
-def setup_logging() -> None:
+def setup_logging(log_file_path: str, log_level: str = "INFO") -> None:
     """Configure logging."""
+    level_name = log_level.upper()
+    level_value = getattr(logging, level_name, logging.INFO)
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    if log_file_path:
+        log_dir = os.path.dirname(log_file_path)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            log_file_path,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(level_value)
+        handlers.append(file_handler)
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=level_value,
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=handlers,
     )
     
     # Reduce noise
@@ -63,11 +80,13 @@ async def run_web(config) -> None:
 
 async def main() -> None:
     """Main entry point - runs both bot and web server."""
-    setup_logging()
-    logger = logging.getLogger(__name__)
-    
     # Load environment variables
     load_dotenv()
+
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    log_file_path = os.getenv("LOG_FILE_PATH", "logs/identitycrisis.log")
+    setup_logging(log_file_path, log_level)
+    logger = logging.getLogger(__name__)
     
     try:
         config = load_config()
