@@ -5,6 +5,7 @@ Listens to voice state updates and renames users on join.
 
 import logging
 import random
+from datetime import datetime, timezone
 from typing import Optional
 
 import discord
@@ -12,7 +13,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot.data import DEFAULT_NICKNAMES, apply_rules
-from shared import IncludedChannel, Guild, Nickname, get_db
+from shared import IncludedChannel, Guild, MemberNickname, Nickname, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,41 @@ class VoiceHandler(commands.Cog):
                 logger.info(f"Created guild entry for {guild.name} ({guild.id})")
             
             return db_guild
+
+    async def _upsert_member_nickname(self, member: discord.Member) -> None:
+        """Upsert a member's reset nickname snapshot on voice join."""
+        db = get_db()
+        now = datetime.now(timezone.utc)
+        async with db.async_session() as session:
+            result = await session.execute(
+                select(MemberNickname).where(
+                    MemberNickname.guild_id == member.guild.id,
+                    MemberNickname.user_id == member.id
+                )
+            )
+            record = result.scalar_one_or_none()
+
+            if record is None:
+                record = MemberNickname(
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                    username=member.name,
+                    display_name=member.display_name,
+                    last_seen_nick=member.nick,
+                    reset_nickname=member.nick,
+                    reset_nickname_manual=False,
+                    last_seen_at=now
+                )
+                session.add(record)
+            else:
+                record.username = member.name
+                record.display_name = member.display_name
+                record.last_seen_nick = member.nick
+                record.last_seen_at = now
+                if not record.reset_nickname_manual:
+                    record.reset_nickname = member.nick
+
+            await session.commit()
     
     def _store_original_nickname(
         self, 
@@ -152,7 +188,7 @@ class VoiceHandler(commands.Cog):
         nickname: Optional[str],
         display_name: str
     ) -> None:
-        """Store the original nickname and display name before changing it."""
+        """Store the original nickname and display name for this voice session."""
         if guild_id not in self.original_nicknames:
             self.original_nicknames[guild_id] = {}
         
@@ -168,13 +204,11 @@ class VoiceHandler(commands.Cog):
         guild_id: int, 
         user_id: int
     ) -> Optional[str]:
-        """Retrieve and remove the stored original display name for restoring."""
+        """Retrieve and remove the stored original nickname for this voice session."""
         if guild_id in self.original_nicknames:
             data = self.original_nicknames[guild_id].pop(user_id, None)
             if data:
-                # Return display_name (server nick if existed, otherwise username)
-                # This ensures we restore to what they had before, not None
-                return data["display_name"]
+                return data["nick"]
         return None
     
     def _get_original_nickname(
@@ -182,11 +216,11 @@ class VoiceHandler(commands.Cog):
         guild_id: int, 
         user_id: int
     ) -> Optional[str]:
-        """Get the stored original display name WITHOUT removing it."""
+        """Get the stored original nickname WITHOUT removing it."""
         if guild_id in self.original_nicknames:
             data = self.original_nicknames[guild_id].get(user_id)
             if data:
-                return data["display_name"]
+                return data["nick"]
         return None
     
     def _get_original_display_name(
@@ -223,12 +257,35 @@ class VoiceHandler(commands.Cog):
         except discord.HTTPException as e:
             logger.error(f"HTTP error changing nickname: {e}")
             return False
+
+    async def _get_reset_nickname(
+        self,
+        guild_id: int,
+        user_id: int
+    ) -> tuple[bool, Optional[str]]:
+        """Fetch the reset nickname for this member from the database."""
+        db = get_db()
+        async with db.async_session() as session:
+            result = await session.execute(
+                select(MemberNickname).where(
+                    MemberNickname.guild_id == guild_id,
+                    MemberNickname.user_id == user_id
+                )
+            )
+            record = result.scalar_one_or_none()
+            if record is None:
+                return False, None
+            return True, record.reset_nickname
     
     async def _restore_nickname(self, member: discord.Member) -> bool:
         """Restore a member's original nickname."""
-        original = self._pop_original_nickname(member.guild.id, member.id)
-        
-        if member.guild.id in self.original_nicknames or original is not None:
+        exists, original = await self._get_reset_nickname(member.guild.id, member.id)
+        self._pop_original_nickname(member.guild.id, member.id)
+
+        if exists:
+            if not self._can_rename_member(member):
+                logger.debug(f"Cannot restore nickname for {member.name}: permission check failed")
+                return False
             try:
                 await member.edit(nick=original)
                 logger.info(
@@ -248,9 +305,12 @@ class VoiceHandler(commands.Cog):
     
     async def _restore_nickname_keep_data(self, member: discord.Member) -> bool:
         """Restore a member's original nickname WITHOUT removing stored data."""
-        original = self._get_original_nickname(member.guild.id, member.id)
-        
-        if original is not None:
+        exists, original = await self._get_reset_nickname(member.guild.id, member.id)
+
+        if exists:
+            if not self._can_rename_member(member):
+                logger.debug(f"Cannot restore nickname for {member.name}: permission check failed")
+                return False
             try:
                 await member.edit(nick=original)
                 logger.info(
@@ -360,6 +420,9 @@ class VoiceHandler(commands.Cog):
         
         # User joined a voice channel OR changed channel
         if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
+            if self._user_joined_voice(before, after):
+                await self._upsert_member_nickname(member)
+
             # If leaving a custom channel, restore first (but keep data for future use)
             if was_custom_channel and self._user_changed_channel(before, after):
                 await self._restore_nickname_keep_data(member)

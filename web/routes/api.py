@@ -3,18 +3,24 @@ API routes for guild and nickname management.
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
-from shared import IncludedChannel, Guild, Nickname, UserSession, CustomChannel, get_db
+from shared import CustomChannel, Guild, IncludedChannel, MemberNickname, Nickname, UserSession, get_config, get_db
 from web.discord_oauth import DiscordOAuth
 from web.routes.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
+
+STALE_MEMBER_DAYS = 30
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 100
 
 
 # Pydantic models for request/response
@@ -50,6 +56,29 @@ class CustomChannelUpdate(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class MemberNicknameUpdate(BaseModel):
+    reset_nickname: Optional[str] = None
+    manual: bool = True
+
+
+async def _apply_member_nickname(
+    guild_id: int,
+    user_id: int,
+    nickname: Optional[str]
+) -> tuple[bool, Optional[str]]:
+    config = get_config()
+    headers = {"Authorization": f"Bot {config.discord_token}"}
+    payload = {"nick": nickname}
+    url = f"{DiscordOAuth.API_BASE}/guilds/{guild_id}/members/{user_id}"
+
+    async with httpx.AsyncClient() as client:
+        response = await client.patch(url, json=payload, headers=headers)
+
+    if response.status_code in (200, 204):
+        return True, None
+    return False, response.text
 
 
 @router.get("/guilds")
@@ -211,6 +240,133 @@ async def delete_nickname(
             raise HTTPException(status_code=404, detail="Nickname not found")
         
         return {"message": "Nickname deleted"}
+
+
+# Member reset nicknames
+@router.get("/guilds/{guild_id}/member-nicknames")
+async def get_member_nicknames(
+    guild_id: int,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    user: UserSession = Depends(get_current_user)
+):
+    """Get paginated member reset nicknames for a guild."""
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page must be >= 1")
+    if page_size < 1 or page_size > MAX_PAGE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Page size must be between 1 and {MAX_PAGE_SIZE}"
+        )
+
+    db = get_db()
+    async with db.async_session() as session:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=STALE_MEMBER_DAYS)
+        await session.execute(
+            delete(MemberNickname).where(
+                MemberNickname.guild_id == guild_id,
+                MemberNickname.last_seen_at < cutoff
+            )
+        )
+        await session.commit()
+
+        total_result = await session.execute(
+            select(func.count()).select_from(MemberNickname).where(
+                MemberNickname.guild_id == guild_id
+            )
+        )
+        total = total_result.scalar_one()
+
+        result = await session.execute(
+            select(MemberNickname)
+            .where(MemberNickname.guild_id == guild_id)
+            .order_by(MemberNickname.last_seen_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        members = result.scalars().all()
+
+        return {
+            "members": [
+                {
+                    "id": m.id,
+                    "user_id": str(m.user_id),
+                    "username": m.username,
+                    "display_name": m.display_name,
+                    "reset_nickname": m.reset_nickname,
+                    "reset_nickname_manual": m.reset_nickname_manual,
+                    "last_seen_at": m.last_seen_at.isoformat() if m.last_seen_at else None,
+                }
+                for m in members
+            ],
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "stale_days": STALE_MEMBER_DAYS,
+        }
+
+
+@router.patch("/guilds/{guild_id}/member-nicknames/{member_id}")
+async def update_member_nickname(
+    guild_id: int,
+    member_id: int,
+    data: MemberNicknameUpdate,
+    user: UserSession = Depends(get_current_user)
+):
+    """Update a member's reset nickname and apply immediately."""
+    nickname = data.reset_nickname
+    if nickname is not None:
+        nickname = nickname.strip()
+        if nickname == "":
+            nickname = None
+        if nickname is not None and len(nickname) > 32:
+            raise HTTPException(
+                status_code=400,
+                detail="Nickname must be 32 characters or less"
+            )
+
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            select(MemberNickname).where(
+                MemberNickname.guild_id == guild_id,
+                MemberNickname.user_id == member_id
+            )
+        )
+        member = result.scalar_one_or_none()
+
+        if not member:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        if data.manual:
+            member.reset_nickname_manual = True
+            member.reset_nickname = nickname
+        else:
+            member.reset_nickname_manual = False
+            member.reset_nickname = nickname if nickname is not None else member.last_seen_nick
+
+        await session.commit()
+
+        applied, error = await _apply_member_nickname(
+            guild_id,
+            member_id,
+            member.reset_nickname
+        )
+
+        if not applied:
+            logger.warning(
+                "Failed to apply nickname update for %s in guild %s: %s",
+                member_id,
+                guild_id,
+                error
+            )
+
+        return {
+            "message": "Member nickname updated",
+            "applied": applied,
+            "reset_nickname": member.reset_nickname,
+            "reset_nickname_manual": member.reset_nickname_manual,
+        }
 
 
 # Included Channels (whitelist)
