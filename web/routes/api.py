@@ -136,22 +136,36 @@ async def _apply_member_nickname(
 async def get_user_guilds(user: UserSession = Depends(get_current_user)):
     """Get all guilds where user has admin permissions and bot is present."""
     from shared import get_config
-    
+
     config = get_config()
     oauth = DiscordOAuth(config)
-    
-    # Get user's guilds from Discord
-    user_guilds = await oauth.get_user_guilds(user.access_token)
-    
-    # Filter to guilds where user has admin
-    admin_guilds = [g for g in user_guilds if oauth.user_has_admin(g)]
-    
-    # Get guilds where bot is present from database
+
     db = get_db()
     async with db.async_session() as session:
+        if _is_log_viewer(user):
+            result = await session.execute(select(Guild))
+            all_guilds = result.scalars().all()
+            return {
+                "guilds": [
+                    {
+                        "id": str(guild.id),
+                        "name": guild.name,
+                        "icon_url": guild.icon_url,
+                    }
+                    for guild in all_guilds
+                ]
+            }
+
+        # Get user's guilds from Discord
+        user_guilds = await oauth.get_user_guilds(user.access_token)
+
+        # Filter to guilds where user has admin
+        admin_guilds = [g for g in user_guilds if oauth.user_has_admin(g)]
+
+        # Get guilds where bot is present from database
         result = await session.execute(select(Guild.id))
         bot_guild_ids = {row[0] for row in result.fetchall()}
-    
+
     # Return only guilds where both conditions are true
     guilds = []
     for guild in admin_guilds:
@@ -162,7 +176,7 @@ async def get_user_guilds(user: UserSession = Depends(get_current_user)):
                 "name": guild["name"],
                 "icon_url": oauth.get_guild_icon_url(guild),
             })
-    
+
     return {"guilds": guilds}
 
 
