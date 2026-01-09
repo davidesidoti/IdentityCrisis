@@ -33,6 +33,23 @@ def _is_log_viewer(user: UserSession) -> bool:
     return bool(config.log_viewer_id and user.discord_id == config.log_viewer_id)
 
 
+def _get_current_log_level() -> str:
+    level_value = logging.getLogger().getEffectiveLevel()
+    return logging.getLevelName(level_value)
+
+
+def _set_log_level(level_name: str) -> str:
+    normalized = level_name.upper()
+    if normalized not in ("INFO", "DEBUG"):
+        raise HTTPException(status_code=400, detail="Invalid log level")
+    level_value = getattr(logging, normalized, logging.INFO)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level_value)
+    for handler in root_logger.handlers:
+        handler.setLevel(level_value)
+    return normalized
+
+
 def _truncate_log_file(log_path: str) -> None:
     root_logger = logging.getLogger()
     log_path_abs = os.path.abspath(log_path)
@@ -91,6 +108,10 @@ class MessageResponse(BaseModel):
 class MemberNicknameUpdate(BaseModel):
     reset_nickname: Optional[str] = None
     manual: bool = True
+
+
+class LogLevelUpdate(BaseModel):
+    level: str
 
 
 async def _apply_member_nickname(
@@ -469,6 +490,29 @@ async def get_logs(
         "line_count": len(tail),
         "last_modified": last_modified,
     }
+
+
+@router.get("/logs/level")
+async def get_log_level(
+    user: UserSession = Depends(get_current_user)
+):
+    """Get current log level (restricted)."""
+    if not _is_log_viewer(user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return {"level": _get_current_log_level()}
+
+
+@router.patch("/logs/level")
+async def set_log_level(
+    data: LogLevelUpdate,
+    user: UserSession = Depends(get_current_user)
+):
+    """Set log level at runtime (restricted)."""
+    if not _is_log_viewer(user):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    new_level = _set_log_level(data.level)
+    logger.info("Log level set to %s by %s", new_level, user.discord_id)
+    return {"level": new_level}
 
 
 @router.delete("/logs")

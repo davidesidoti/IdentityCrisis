@@ -9,7 +9,15 @@
             <h1 class="text-2xl font-bold text-white">Bot Logs</h1>
             <p class="text-sm text-gray-400">Visible only to your Discord account.</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+                <span>Level</span>
+                <button @click="toggleLogLevel()"
+                        :disabled="loading || logLevelLoading"
+                        class="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-xs font-semibold transition-colors">
+                    <span x-text="logLevelLoading ? '...' : logLevel"></span>
+                </button>
+            </div>
             <span class="text-xs text-gray-500" x-text="lastUpdated ? 'Last refresh: ' + lastUpdated : 'Last refresh: -'"></span>
             <button @click="refreshLogs()"
                     :disabled="loading"
@@ -42,9 +50,44 @@ function logViewer() {
         loading: false,
         lastUpdated: null,
         linesLimit: 200,
+        logLevel: 'INFO',
+        logLevelLoading: false,
 
         async init() {
-            await this.refreshLogs();
+            await Promise.all([
+                this.refreshLogLevel(),
+                this.refreshLogs()
+            ]);
+        },
+
+        async refreshLogLevel() {
+            if (this.logLevelLoading) return;
+            this.logLevelLoading = true;
+            const response = await fetch('/api/logs/level');
+            if (response.ok) {
+                const data = await response.json();
+                this.logLevel = data.level || 'INFO';
+            }
+            this.logLevelLoading = false;
+        },
+
+        async toggleLogLevel() {
+            if (this.logLevelLoading) return;
+            this.logLevelLoading = true;
+            const nextLevel = this.logLevel === 'DEBUG' ? 'INFO' : 'DEBUG';
+            const response = await fetch('/api/logs/level', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level: nextLevel })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                this.logLevel = data.level || nextLevel;
+                this.toast(`Log level set to ${this.logLevel}`, 'success');
+            } else {
+                this.toast('Failed to update log level', 'error');
+            }
+            this.logLevelLoading = false;
         },
 
         async refreshLogs() {
@@ -57,6 +100,7 @@ function logViewer() {
                 this.lastUpdated = new Date().toLocaleTimeString();
             } else {
                 this.logs = ['Failed to load logs.'];
+                this.toast('Failed to load logs', 'error');
             }
             this.loading = false;
         },
@@ -69,11 +113,19 @@ function logViewer() {
             if (response.ok) {
                 this.logs = [];
                 this.lastUpdated = new Date().toLocaleTimeString();
+                this.toast('Logs cleared', 'success');
             } else {
                 this.logs = ['Failed to clear logs.'];
+                this.toast('Failed to clear logs', 'error');
             }
             this.loading = false;
-        }
+        },
+
+        toast(message, type = 'success') {
+            window.dispatchEvent(new CustomEvent('toast', {
+                detail: { message, type, id: Date.now() }
+            }));
+        },
     }
 }
 </script>
