@@ -90,6 +90,7 @@
             <div class="p-6">
                 <div class="flex items-center justify-between text-xs text-gray-500 mb-4">
                     <span x-text="'Auto-clean: inactive for ' + memberStaleDays + ' days'"></span>
+                    <span x-text="memberLastRefresh ? 'Last refresh: ' + memberLastRefresh : 'Last refresh: -'"></span>
                     <span x-show="memberLoading">Loading...</span>
                 </div>
 
@@ -370,6 +371,7 @@ function guildSettings(guildId) {
         memberStaleDays: 30,
         memberLoading: false,
         memberRefreshHandle: null,
+        memberLastRefresh: null,
         loading: true,
         newNickname: '',
         newChannelId: '',
@@ -426,6 +428,7 @@ function guildSettings(guildId) {
                 this.memberPageSize = data.page_size;
                 this.memberTotal = data.total;
                 this.memberStaleDays = data.stale_days;
+                this.memberLastRefresh = new Date().toLocaleTimeString();
             } else {
                 this.toast('Failed to load member nicknames', 'error');
             }
@@ -447,7 +450,7 @@ function guildSettings(guildId) {
                 if (document.visibilityState === 'visible' && !this.memberLoading) {
                     this.refreshMemberNicknames();
                 }
-            }, 30000);
+            }, 60000);
         },
 
         async manualRefreshMemberNicknames() {
