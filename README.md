@@ -16,6 +16,8 @@ Every time someone joins a voice channel, IdentityCrisis automatically changes t
 - **Custom Nickname Lists**: Add your own nicknames via the dashboard
 - **Immunity Role**: Protect certain users from the chaos
 - **Excluded Channels**: Skip renaming in specific voice channels
+- **Member Reset Nicknames**: Set per-member reset nicknames from the dashboard
+- **Logs Dashboard**: View/clear logs and toggle log level (restricted)
 
 ## Tech Stack
 
@@ -154,7 +156,13 @@ This starts both the Discord bot and the web dashboard. Access the dashboard at 
 | `BASE_URL` | No | Public URL of the dashboard |
 | `LOG_FILE_PATH` | No | Log file path (default: `logs/identitycrisis.log`) |
 | `LOG_LEVEL` | No | Log level (default: `INFO`) |
-| `LOG_VIEWER_ID` | No | Discord user ID allowed to view logs page |
+| `LOG_VIEWER_ID` | No | Discord user ID allowed to view logs page and see all bot guilds |
+
+## Logs Dashboard
+
+- Visit `/dashboard/logs` to view and clear logs.
+- The log level can be toggled between INFO and DEBUG from the page.
+- Access is restricted to the Discord user ID set in `LOG_VIEWER_ID`.
 
 ## Deployment
 
