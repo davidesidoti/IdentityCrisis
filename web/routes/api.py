@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
 
 STALE_MEMBER_DAYS = 30
-DEFAULT_PAGE_SIZE = 25
+DEFAULT_PAGE_SIZE = 10
 MAX_PAGE_SIZE = 100
 DEFAULT_LOG_LINES = 200
 MAX_LOG_LINES = 1000
