@@ -6,7 +6,7 @@ Uses SQLAlchemy async with PostgreSQL.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, JSON, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, JSON, func, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -53,6 +53,10 @@ class Guild(Base):
         back_populates="guild",
         cascade="all, delete-orphan"
     )
+    member_nicknames: Mapped[list["MemberNickname"]] = relationship(
+        back_populates="guild",
+        cascade="all, delete-orphan"
+    )
 
 
 class Nickname(Base):
@@ -93,6 +97,39 @@ class CustomChannel(Base):
     
     # Relationship
     guild: Mapped["Guild"] = relationship(back_populates="custom_channels")
+
+
+class MemberNickname(Base):
+    """Per-user reset nickname settings for a guild."""
+    __tablename__ = "member_nicknames"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "user_id", name="uq_member_nicknames_guild_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(BigInteger)
+    username: Mapped[str] = mapped_column(String(100))
+    display_name: Mapped[str] = mapped_column(String(100))
+    last_seen_nick: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    reset_nickname: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    reset_nickname_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    guild: Mapped["Guild"] = relationship(back_populates="member_nicknames")
 
 
 class UserSession(Base):

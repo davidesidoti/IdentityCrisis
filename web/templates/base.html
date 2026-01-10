@@ -56,6 +56,11 @@
                         <a href="/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
                             Dashboard
                         </a>
+                        {% if is_log_viewer %}
+                            <a href="/dashboard/logs" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                Logs
+                            </a>
+                        {% endif %}
                         <div class="flex items-center space-x-3">
                             {% if user.avatar_url %}
                                 <img src="{{ user.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">

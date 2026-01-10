@@ -70,6 +70,83 @@
                 </div>
             </div>
         </div>
+
+        <!-- Member Reset Nicknames Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Member Reset Nicknames</h2>
+                    <p class="text-sm text-gray-400">Set the nickname used when a member leaves voice.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button @click="manualRefreshMemberNicknames()"
+                            :disabled="memberLoading"
+                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-xs font-medium transition-colors">
+                        Refresh
+                    </button>
+                    <span class="text-sm text-gray-500" x-text="memberTotal + ' member(s)'"></span>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between text-xs text-gray-500 mb-4">
+                    <span x-text="'Auto-clean: inactive for ' + memberStaleDays + ' days'"></span>
+                    <span x-text="memberLastRefresh ? 'Last refresh: ' + memberLastRefresh : 'Last refresh: -'"></span>
+                    <span x-show="memberLoading">Loading...</span>
+                </div>
+
+                <div x-show="memberNicknames.length > 0" class="space-y-3">
+                    <template x-for="member in memberNicknames" :key="member.user_id">
+                        <div class="bg-discord-darker rounded-lg px-4 py-3">
+                            <div class="flex items-center justify-between mb-3">
+                                <div>
+                                    <p class="text-white font-medium" x-text="member.display_name"></p>
+                                    <p class="text-xs text-gray-500" x-text="'@' + member.username + ' | ' + member.user_id"></p>
+                                </div>
+                                <span class="text-xs text-gray-500" x-text="formatLastSeen(member.last_seen_at)"></span>
+                            </div>
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <input type="text"
+                                       x-model="member.reset_nickname_input"
+                                       maxlength="32"
+                                       placeholder="Reset nickname (leave empty to clear)"
+                                       class="flex-1 bg-discord-dark border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple text-sm">
+                                <div class="flex gap-2">
+                                    <button @click="saveMemberNickname(member)"
+                                            class="px-3 py-2 bg-discord-blurple hover:bg-opacity-80 rounded-lg text-white text-sm font-medium transition-colors">
+                                        Save
+                                    </button>
+                                    <button @click="removeMemberNickname(member)"
+                                            class="px-3 py-2 bg-discord-red hover:bg-opacity-80 rounded-lg text-white text-sm font-medium transition-colors">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2" x-show="!member.reset_nickname_manual">
+                                Auto: updated on each voice join
+                            </p>
+                        </div>
+                    </template>
+                </div>
+
+                <div x-show="memberNicknames.length === 0 && !memberLoading" class="text-center py-8 text-gray-500">
+                    <p>No members yet. Join a voice channel to populate this list.</p>
+                </div>
+
+                <div class="flex items-center justify-between mt-4">
+                    <button @click="prevMemberPage()"
+                            :disabled="memberPage <= 1"
+                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-sm">
+                        Prev
+                    </button>
+                    <span class="text-xs text-gray-500" x-text="memberPageText()"></span>
+                    <button @click="nextMemberPage()"
+                            :disabled="memberPage >= memberPageCount()"
+                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded text-white text-sm">
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
         
         <!-- Nicknames Card -->
         <div class="bg-discord-dark rounded-xl border border-gray-700 mb-8">
@@ -287,6 +364,14 @@ function guildSettings(guildId) {
         guild: {},
         nicknames: [],
         includedChannels: [],
+        memberNicknames: [],
+        memberPage: 1,
+        memberPageSize: 10,
+        memberTotal: 0,
+        memberStaleDays: 30,
+        memberLoading: false,
+        memberRefreshHandle: null,
+        memberLastRefresh: null,
         loading: true,
         newNickname: '',
         newChannelId: '',
@@ -301,11 +386,18 @@ function guildSettings(guildId) {
             await Promise.all([
                 this.loadGuild(),
                 this.loadNicknames(),
+                this.loadMemberNicknames(),
                 this.loadIncludedChannels(),
                 this.loadCustomChannels(),
                 this.loadAvailableRules()
             ]);
             this.loading = false;
+            this.startMemberRefreshTimer();
+            window.addEventListener('beforeunload', () => {
+                if (this.memberRefreshHandle) {
+                    clearInterval(this.memberRefreshHandle);
+                }
+            });
         },
         
         async loadGuild() {
@@ -321,6 +413,50 @@ function guildSettings(guildId) {
                 const data = await response.json();
                 this.nicknames = data.nicknames;
             }
+        },
+
+        async loadMemberNicknames(page = this.memberPage) {
+            this.memberLoading = true;
+            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames?page=${page}&page_size=${this.memberPageSize}`);
+            if (response.ok) {
+                const data = await response.json();
+                this.memberNicknames = data.members.map(member => ({
+                    ...member,
+                    reset_nickname_input: member.reset_nickname || ''
+                }));
+                this.memberPage = data.page;
+                this.memberPageSize = data.page_size;
+                this.memberTotal = data.total;
+                this.memberStaleDays = data.stale_days;
+                this.memberLastRefresh = new Date().toLocaleTimeString();
+            } else {
+                this.toast('Failed to load member nicknames', 'error');
+            }
+            this.memberLoading = false;
+        },
+
+        async refreshMemberNicknames() {
+            await this.loadMemberNicknames(this.memberPage);
+            if (this.memberPage > this.memberPageCount()) {
+                await this.loadMemberNicknames(this.memberPageCount());
+            }
+        },
+
+        startMemberRefreshTimer() {
+            if (this.memberRefreshHandle) {
+                clearInterval(this.memberRefreshHandle);
+            }
+            this.memberRefreshHandle = setInterval(() => {
+                if (document.visibilityState === 'visible' && !this.memberLoading) {
+                    this.refreshMemberNicknames();
+                }
+            }, 60000);
+        },
+
+        async manualRefreshMemberNicknames() {
+            if (this.memberLoading) return;
+            this.startMemberRefreshTimer();
+            await this.refreshMemberNicknames();
         },
         
         async loadIncludedChannels() {
@@ -389,6 +525,74 @@ function guildSettings(guildId) {
             } else {
                 this.toast('Failed to delete nickname', 'error');
             }
+        },
+
+        async saveMemberNickname(member) {
+            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reset_nickname: member.reset_nickname_input,
+                    manual: true
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                member.reset_nickname = data.reset_nickname;
+                member.reset_nickname_manual = data.reset_nickname_manual;
+                member.reset_nickname_input = data.reset_nickname || '';
+                if (!data.applied) {
+                    this.toast('Saved, but failed to apply immediately', 'error');
+                } else {
+                    this.toast('Member reset nickname updated', 'success');
+                }
+                await this.refreshMemberNicknames();
+            } else {
+                const error = await response.json();
+                this.toast(error.detail || 'Failed to update member nickname', 'error');
+            }
+        },
+
+        async removeMemberNickname(member) {
+            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                this.toast('Member entry removed', 'success');
+                await this.refreshMemberNicknames();
+            } else {
+                const error = await response.json();
+                this.toast(error.detail || 'Failed to remove member entry', 'error');
+            }
+        },
+
+        memberPageCount() {
+            if (!this.memberPageSize) return 1;
+            return Math.max(1, Math.ceil(this.memberTotal / this.memberPageSize));
+        },
+
+        memberPageText() {
+            if (this.memberTotal === 0) return 'Page 1 of 1';
+            return `Page ${this.memberPage} of ${this.memberPageCount()}`;
+        },
+
+        async nextMemberPage() {
+            if (this.memberPage >= this.memberPageCount()) return;
+            await this.loadMemberNicknames(this.memberPage + 1);
+        },
+
+        async prevMemberPage() {
+            if (this.memberPage <= 1) return;
+            await this.loadMemberNicknames(this.memberPage - 1);
+        },
+
+        formatLastSeen(timestamp) {
+            if (!timestamp) return 'Last seen: unknown';
+            const date = new Date(timestamp);
+            if (Number.isNaN(date.getTime())) return 'Last seen: unknown';
+            return `Last seen: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
         },
         
         async addIncludedChannel() {
