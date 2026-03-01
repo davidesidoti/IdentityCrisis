@@ -194,6 +194,90 @@
             </div>
         </div>
         
+        <!-- Channel Nickname Lists Card -->
+        <div class="bg-discord-dark rounded-xl border border-gray-700 mb-8">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Channel Nickname Lists</h2>
+                    <p class="text-sm text-gray-400">Assign different nickname pools to specific voice channels.</p>
+                </div>
+                <span class="text-sm text-gray-500" x-text="channelNicknameGroups.length + ' channel(s)'"></span>
+            </div>
+            <div class="p-6">
+                <!-- Add form -->
+                <div class="mb-6 p-4 bg-discord-darker rounded-lg">
+                    <div class="flex gap-3 mb-3">
+                        <input type="text"
+                               x-model="newChNickChannelId"
+                               placeholder="Channel ID"
+                               class="w-48 bg-discord-dark border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                        <input type="text"
+                               x-model="newChNickChannelName"
+                               placeholder="Channel Name"
+                               class="flex-1 bg-discord-dark border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                    </div>
+                    <form @submit.prevent="addChannelNickname()" class="flex gap-3">
+                        <input type="text"
+                               x-model="newChNickInput"
+                               maxlength="32"
+                               placeholder="Enter a nickname for this channel..."
+                               class="flex-1 bg-discord-dark border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-discord-blurple">
+                        <button type="submit"
+                                :disabled="!newChNickChannelId.trim() || !newChNickChannelName.trim() || !newChNickInput.trim()"
+                                class="px-4 py-2 bg-discord-blurple hover:bg-opacity-80 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors">
+                            Add
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Info box -->
+                <div class="mb-4 p-3 bg-discord-blurple/10 border border-discord-blurple/30 rounded-lg">
+                    <p class="text-sm text-gray-300">
+                        <span class="text-discord-blurple font-medium">Tip:</span>
+                        Channels with nickname lists are automatically included in the whitelist.
+                        If a channel also has custom rules, the rules will be applied to the randomly picked channel nickname.
+                    </p>
+                </div>
+
+                <!-- Channel groups -->
+                <div x-show="channelNicknameGroups.length > 0" class="space-y-3">
+                    <template x-for="group in channelNicknameGroups" :key="group.channel_id">
+                        <div class="bg-discord-darker rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <div>
+                                    <span class="text-white font-medium" x-text="group.channel_name"></span>
+                                    <span class="text-xs text-gray-500 ml-2" x-text="'#' + group.channel_id"></span>
+                                    <span class="text-xs text-gray-500 ml-2" x-text="group.nicknames.length + ' nickname(s)'"></span>
+                                </div>
+                                <button @click="deleteChannelNicknameList(group.channel_id)"
+                                        class="text-gray-500 hover:text-discord-red transition-colors text-xs">
+                                    Remove All
+                                </button>
+                            </div>
+                            <div class="space-y-1">
+                                <template x-for="nick in group.nicknames" :key="nick.id">
+                                    <div class="flex items-center justify-between bg-discord-dark rounded px-3 py-2 group">
+                                        <span class="text-gray-300 text-sm" x-text="nick.nickname"></span>
+                                        <button @click="deleteChannelNickname(nick.id)"
+                                                class="text-gray-500 hover:text-discord-red opacity-0 group-hover:opacity-100 transition-all">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Empty state -->
+                <div x-show="channelNicknameGroups.length === 0" class="text-center py-8 text-gray-500">
+                    <p>No channel-specific nicknames. Channels will use the guild-wide list.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Included Channels Card -->
         <div class="bg-discord-dark rounded-xl border border-gray-700">
             <div class="p-6 border-b border-gray-700 flex items-center justify-between">
@@ -381,7 +465,11 @@ function guildSettings(guildId) {
         newCustomChannelId: '',
         newCustomChannelName: '',
         newCustomRules: [],
-        
+        channelNicknameGroups: [],
+        newChNickChannelId: '',
+        newChNickChannelName: '',
+        newChNickInput: '',
+
         async init() {
             await Promise.all([
                 this.loadGuild(),
@@ -389,6 +477,7 @@ function guildSettings(guildId) {
                 this.loadMemberNicknames(),
                 this.loadIncludedChannels(),
                 this.loadCustomChannels(),
+                this.loadChannelNicknames(),
                 this.loadAvailableRules()
             ]);
             this.loading = false;
@@ -639,7 +728,64 @@ function guildSettings(guildId) {
                 this.customChannels = data.channels;
             }
         },
-        
+
+        async loadChannelNicknames() {
+            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames`);
+            if (response.ok) {
+                const data = await response.json();
+                this.channelNicknameGroups = data.channels;
+            }
+        },
+
+        async addChannelNickname() {
+            if (!this.newChNickChannelId.trim() || !this.newChNickChannelName.trim() || !this.newChNickInput.trim()) return;
+
+            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel_id: this.newChNickChannelId.trim(),
+                    channel_name: this.newChNickChannelName.trim(),
+                    nickname: this.newChNickInput.trim()
+                })
+            });
+
+            if (response.ok) {
+                this.newChNickInput = '';
+                await this.loadChannelNicknames();
+                this.toast('Channel nickname added!', 'success');
+            } else {
+                const error = await response.json();
+                this.toast(error.detail || 'Failed to add channel nickname', 'error');
+            }
+        },
+
+        async deleteChannelNickname(nicknameId) {
+            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames/${nicknameId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                await this.loadChannelNicknames();
+                this.toast('Channel nickname deleted!', 'success');
+            } else {
+                this.toast('Failed to delete channel nickname', 'error');
+            }
+        },
+
+        async deleteChannelNicknameList(channelId) {
+            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames/channel/${channelId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                await this.loadChannelNicknames();
+                this.toast('All nicknames for channel removed!', 'success');
+            } else {
+                this.toast('Failed to remove channel nicknames', 'error');
+            }
+        },
+
         async loadAvailableRules() {
             const response = await fetch('/api/available-rules');
             if (response.ok) {

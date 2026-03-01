@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 
-from shared import CustomChannel, Guild, IncludedChannel, MemberNickname, Nickname, UserSession, get_config, get_db
+from shared import ChannelNickname, CustomChannel, Guild, IncludedChannel, MemberNickname, Nickname, UserSession, get_config, get_db
 from web.discord_oauth import DiscordOAuth
 from web.routes.dependencies import get_current_user
 
@@ -108,6 +108,12 @@ class MessageResponse(BaseModel):
 class MemberNicknameUpdate(BaseModel):
     reset_nickname: Optional[str] = None
     manual: bool = True
+
+
+class ChannelNicknameCreate(BaseModel):
+    channel_id: str
+    channel_name: str
+    nickname: str
 
 
 class LogLevelUpdate(BaseModel):
@@ -752,10 +758,137 @@ async def delete_custom_channel(
 async def get_available_rules():
     """Get list of available transformation rules."""
     from bot.data import TRANSFORMER_NAMES
-    
+
     return {
         "rules": [
             {"type": key, "name": name, "has_value": key in ["prefix", "suffix"]}
             for key, name in TRANSFORMER_NAMES.items()
         ]
     }
+
+
+# Channel Nickname Lists
+@router.get("/guilds/{guild_id}/channel-nicknames")
+async def get_channel_nicknames(
+    guild_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Get all channel-specific nicknames for a guild, grouped by channel."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            select(ChannelNickname).where(ChannelNickname.guild_id == guild_id)
+        )
+        entries = result.scalars().all()
+
+        channels: dict[str, dict] = {}
+        for entry in entries:
+            ch_id = str(entry.channel_id)
+            if ch_id not in channels:
+                channels[ch_id] = {
+                    "channel_id": ch_id,
+                    "channel_name": entry.channel_name,
+                    "nicknames": [],
+                }
+            channels[ch_id]["nicknames"].append({
+                "id": entry.id,
+                "nickname": entry.nickname,
+            })
+
+        return {"channels": list(channels.values())}
+
+
+@router.post("/guilds/{guild_id}/channel-nicknames")
+async def add_channel_nickname(
+    guild_id: int,
+    data: ChannelNicknameCreate,
+    user: UserSession = Depends(get_current_user)
+):
+    """Add a nickname to a specific channel."""
+    if len(data.nickname) > 32:
+        raise HTTPException(
+            status_code=400,
+            detail="Nickname must be 32 characters or less"
+        )
+
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            select(Guild).where(Guild.id == guild_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Guild not found")
+
+        # Check for duplicate
+        result = await session.execute(
+            select(ChannelNickname).where(
+                ChannelNickname.guild_id == guild_id,
+                ChannelNickname.channel_id == int(data.channel_id),
+                ChannelNickname.nickname == data.nickname
+            )
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Nickname already exists for this channel")
+
+        entry = ChannelNickname(
+            guild_id=guild_id,
+            channel_id=int(data.channel_id),
+            channel_name=data.channel_name,
+            nickname=data.nickname,
+        )
+        session.add(entry)
+        await session.commit()
+        await session.refresh(entry)
+
+        return {
+            "id": entry.id,
+            "channel_id": str(entry.channel_id),
+            "channel_name": entry.channel_name,
+            "nickname": entry.nickname,
+        }
+
+
+@router.delete("/guilds/{guild_id}/channel-nicknames/{nickname_id}")
+async def delete_channel_nickname(
+    guild_id: int,
+    nickname_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Delete a single nickname from a channel."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            delete(ChannelNickname).where(
+                ChannelNickname.id == nickname_id,
+                ChannelNickname.guild_id == guild_id
+            )
+        )
+        await session.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Channel nickname not found")
+
+        return {"message": "Channel nickname deleted"}
+
+
+@router.delete("/guilds/{guild_id}/channel-nicknames/channel/{channel_id}")
+async def delete_channel_nickname_list(
+    guild_id: int,
+    channel_id: int,
+    user: UserSession = Depends(get_current_user)
+):
+    """Delete all nicknames for a specific channel."""
+    db = get_db()
+    async with db.async_session() as session:
+        result = await session.execute(
+            delete(ChannelNickname).where(
+                ChannelNickname.guild_id == guild_id,
+                ChannelNickname.channel_id == channel_id
+            )
+        )
+        await session.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="No nicknames found for this channel")
+
+        return {"message": f"All nicknames for channel removed ({result.rowcount} deleted)"}
