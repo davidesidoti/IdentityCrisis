@@ -13,7 +13,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot.data import DEFAULT_NICKNAMES, apply_rules
-from shared import IncludedChannel, Guild, MemberNickname, Nickname, get_db
+from shared import ChannelNickname, IncludedChannel, Guild, MemberNickname, Nickname, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -47,16 +47,28 @@ class VoiceHandler(commands.Cog):
             if custom_nicknames:
                 return custom_nicknames
             return DEFAULT_NICKNAMES.copy()
-    
+
+    async def _get_channel_nicknames(self, guild_id: int, channel_id: int) -> list[str]:
+        """Get custom nicknames for a specific channel, if any."""
+        db = get_db()
+        async with db.async_session() as session:
+            result = await session.execute(
+                select(ChannelNickname.nickname).where(
+                    ChannelNickname.guild_id == guild_id,
+                    ChannelNickname.channel_id == channel_id
+                )
+            )
+            return [row[0] for row in result.fetchall()]
+
     async def _is_channel_allowed(self, guild_id: int, channel_id: int) -> bool:
         """
         Check if the bot is allowed to work in this channel.
-        - If no included channels AND no custom channels: ALL channels are allowed
-        - If included channels or custom channels exist: ONLY those channels are allowed
-        - Custom channels are always implicitly included
+        - If no included channels, custom channels, or channel nicknames: ALL channels are allowed
+        - If any of those exist: ONLY whitelisted channels are allowed
+        - Custom channels and channels with nickname lists are always implicitly included
         """
-        from shared import IncludedChannel, CustomChannel
-        
+        from shared import IncludedChannel, CustomChannel, ChannelNickname
+
         db = get_db()
         async with db.async_session() as session:
             # Check if this is a custom channel (always allowed)
@@ -68,28 +80,46 @@ class VoiceHandler(commands.Cog):
             )
             if result.scalar_one_or_none():
                 return True
-            
+
+            # Check if this channel has a custom nickname list (always allowed)
+            result = await session.execute(
+                select(ChannelNickname.id).where(
+                    ChannelNickname.guild_id == guild_id,
+                    ChannelNickname.channel_id == channel_id
+                ).limit(1)
+            )
+            if result.scalar_one_or_none():
+                return True
+
             # Get included channels
             result = await session.execute(
                 select(IncludedChannel).where(IncludedChannel.guild_id == guild_id)
             )
             included_channels = result.scalars().all()
-            
+
             # Get custom channels (to check if any exist)
             result = await session.execute(
                 select(CustomChannel).where(CustomChannel.guild_id == guild_id)
             )
             custom_channels = result.scalars().all()
-            
-            # If no included channels AND no custom channels, all channels are allowed
-            if not included_channels and not custom_channels:
+
+            # Check if any channel nicknames exist for this guild
+            result = await session.execute(
+                select(ChannelNickname.id).where(
+                    ChannelNickname.guild_id == guild_id
+                ).limit(1)
+            )
+            has_channel_nicknames = result.scalar_one_or_none() is not None
+
+            # If no included channels AND no custom channels AND no channel nicknames, all allowed
+            if not included_channels and not custom_channels and not has_channel_nicknames:
                 return True
-            
+
             # If we have included channels, check if this channel is in the list
             if included_channels:
                 return any(ch.channel_id == channel_id for ch in included_channels)
-            
-            # If we only have custom channels (but this isn't one of them), not allowed
+
+            # If we only have custom channels/channel nicknames (but this isn't one), not allowed
             return False
         
     async def _get_custom_channel_rules(self, guild_id: int, channel_id: int) -> list[dict] | None:
@@ -465,14 +495,33 @@ class VoiceHandler(commands.Cog):
                     member.display_name
                 )
             
-            # Check for custom channel rules first
-            custom_rules = await self._get_custom_channel_rules(
-                member.guild.id, 
+            # Get channel-specific nicknames and custom rules
+            channel_nicknames = await self._get_channel_nicknames(
+                member.guild.id,
                 after.channel.id
             )
-            
-            if custom_rules:
-                # Apply transformation rules to the user's ORIGINAL display name
+            custom_rules = await self._get_custom_channel_rules(
+                member.guild.id,
+                after.channel.id
+            )
+
+            if channel_nicknames:
+                # Channel has its own nickname list
+                base = random.choice(channel_nicknames)
+                if custom_rules:
+                    new_nickname = apply_rules(base, custom_rules)
+                    logger.debug(
+                        "Channel nickname + rules for %s in guild %s: base=%r, result=%r",
+                        member.id, member.guild.id, base, new_nickname,
+                    )
+                else:
+                    new_nickname = base
+                    logger.debug(
+                        "Channel nickname for %s in guild %s: %r",
+                        member.id, member.guild.id, new_nickname,
+                    )
+            elif custom_rules:
+                # Existing behavior: transform original display name
                 original_name = self._get_original_display_name(member.guild.id, member.id)
                 if not original_name:
                     logger.debug(
@@ -497,10 +546,10 @@ class VoiceHandler(commands.Cog):
                     new_nickname,
                 )
             else:
-                # Standard random nickname
+                # Standard random nickname from guild pool
                 nicknames = await self._get_guild_nicknames(member.guild.id)
                 new_nickname = random.choice(nicknames)
-            
+
             await self._change_nickname(member, new_nickname)
 
 

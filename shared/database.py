@@ -57,6 +57,10 @@ class Guild(Base):
         back_populates="guild",
         cascade="all, delete-orphan"
     )
+    channel_nicknames: Mapped[list["ChannelNickname"]] = relationship(
+        back_populates="guild",
+        cascade="all, delete-orphan"
+    )
 
 
 class Nickname(Base):
@@ -97,6 +101,24 @@ class CustomChannel(Base):
     
     # Relationship
     guild: Mapped["Guild"] = relationship(back_populates="custom_channels")
+
+
+class ChannelNickname(Base):
+    """Custom nicknames for a specific voice channel in a guild."""
+    __tablename__ = "channel_nicknames"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "channel_id", "nickname",
+                         name="uq_channel_nicknames_guild_channel_nick"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"))
+    channel_id: Mapped[int] = mapped_column(BigInteger)
+    channel_name: Mapped[str] = mapped_column(String(100))
+    nickname: Mapped[str] = mapped_column(String(32))  # Discord nickname limit
+
+    # Relationship
+    guild: Mapped["Guild"] = relationship(back_populates="channel_nicknames")
 
 
 class MemberNickname(Base):

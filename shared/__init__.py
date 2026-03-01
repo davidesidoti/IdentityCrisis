@@ -4,6 +4,7 @@ from .config import Config, get_config, load_config
 from .database import (
     Base,
     Database,
+    ChannelNickname,
     IncludedChannel,
     CustomChannel,
     Guild,
@@ -22,6 +23,7 @@ __all__ = [
     "Database",
     "Guild",
     "Nickname",
+    "ChannelNickname",
     "IncludedChannel",
     "CustomChannel",
     "MemberNickname",
