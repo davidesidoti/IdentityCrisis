@@ -338,6 +338,41 @@ class VoiceHandler(commands.Cog):
             base_nickname, user_id, scope,
         )
 
+    async def _prepopulate_active_nicknames(self) -> None:
+        """Scan all voice channels on startup and track nicknames already in use.
+
+        This prevents duplicate assignments when the bot restarts while users
+        are already in voice channels with bot-assigned nicknames.
+        """
+        total = 0
+        for guild in self.bot.guilds:
+            guild_settings = await self._get_guild_settings(guild.id)
+            if guild_settings is None or not guild_settings.enabled:
+                continue
+
+            for channel in guild.voice_channels:
+                members = channel.members
+                if not members:
+                    continue
+
+                # Determine which pool applies to this channel
+                channel_nicks = await self._get_channel_nicknames(guild.id, channel.id)
+                if channel_nicks:
+                    pool = channel_nicks
+                    scope = (guild.id, channel.id)
+                else:
+                    pool = await self._get_guild_nicknames(guild.id)
+                    scope = (guild.id, None)
+
+                pool_set = set(pool)
+                for member in members:
+                    if member.nick and member.nick in pool_set:
+                        self._register_nickname(guild.id, member.id, member.nick, scope)
+                        total += 1
+
+        if total:
+            logger.info("Pre-populated %d active nickname(s) from current voice state", total)
+
     async def _change_nickname(
         self, 
         member: discord.Member, 
@@ -488,10 +523,15 @@ class VoiceHandler(commands.Cog):
         )
     
     @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Pre-populate active nicknames from current voice state on startup."""
+        await self._prepopulate_active_nicknames()
+
+    @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Create guild entry when bot joins a server."""
         await self._ensure_guild_exists(guild)
-    
+
     @commands.Cog.listener()
     async def on_voice_state_update(
         self,
@@ -578,6 +618,8 @@ class VoiceHandler(commands.Cog):
                 # Channel has its own nickname list — pick unique
                 scope = (member.guild.id, after.channel.id)
                 base = self._pick_unique_nickname(channel_nicknames, scope)
+                # Register BEFORE the await to prevent race conditions
+                self._register_nickname(member.guild.id, member.id, base, scope)
                 if custom_rules:
                     new_nickname = apply_rules(base, custom_rules)
                     logger.debug(
@@ -620,11 +662,14 @@ class VoiceHandler(commands.Cog):
                 scope = (member.guild.id, None)
                 nicknames = await self._get_guild_nicknames(member.guild.id)
                 base = self._pick_unique_nickname(nicknames, scope)
+                # Register BEFORE the await to prevent race conditions
+                self._register_nickname(member.guild.id, member.id, base, scope)
                 new_nickname = base
 
             success = await self._change_nickname(member, new_nickname)
-            if success and scope is not None:
-                self._register_nickname(member.guild.id, member.id, base, scope)
+            if not success and scope is not None:
+                # Permission denied or HTTP error — release the slot
+                self._release_nickname(member.guild.id, member.id)
 
 
 async def setup(bot: commands.Bot) -> None:
