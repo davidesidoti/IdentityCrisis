@@ -69,7 +69,7 @@ IdentityCrisis/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/IdentityCrisis.git
+git clone https://github.com/davidesidoti/IdentityCrisis.git
 cd IdentityCrisis
 ```
 
