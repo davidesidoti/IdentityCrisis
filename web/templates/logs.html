@@ -63,7 +63,7 @@ function logViewer() {
         async refreshLogLevel() {
             if (this.logLevelLoading) return;
             this.logLevelLoading = true;
-            const response = await fetch('/api/logs/level');
+            const response = await fetch(ROOT_PATH + '/api/logs/level');
             if (response.ok) {
                 const data = await response.json();
                 this.logLevel = data.level || 'INFO';
@@ -75,7 +75,7 @@ function logViewer() {
             if (this.logLevelLoading) return;
             this.logLevelLoading = true;
             const nextLevel = this.logLevel === 'DEBUG' ? 'INFO' : 'DEBUG';
-            const response = await fetch('/api/logs/level', {
+            const response = await fetch(ROOT_PATH + '/api/logs/level', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ level: nextLevel })
@@ -93,7 +93,7 @@ function logViewer() {
         async refreshLogs() {
             if (this.loading) return;
             this.loading = true;
-            const response = await fetch(`/api/logs?lines=${this.linesLimit}`);
+            const response = await fetch(`${ROOT_PATH}/api/logs?lines=${this.linesLimit}`);
             if (response.ok) {
                 const data = await response.json();
                 this.logs = data.lines || [];
@@ -109,7 +109,7 @@ function logViewer() {
             if (this.loading) return;
             if (!confirm('Clear all logs?')) return;
             this.loading = true;
-            const response = await fetch('/api/logs', { method: 'DELETE' });
+            const response = await fetch(ROOT_PATH + '/api/logs', { method: 'DELETE' });
             if (response.ok) {
                 this.logs = [];
                 this.lastUpdated = new Date().toLocaleTimeString();

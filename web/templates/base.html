@@ -30,6 +30,7 @@
     
     <!-- Alpine.js for interactivity -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>var ROOT_PATH = '{{ config.root_path if config else "" }}';</script>
     
     <style>
         [x-cloak] { display: none !important; }
@@ -44,7 +45,7 @@
             <div class="flex items-center justify-between h-16">
                 <!-- Logo -->
                 <div class="flex items-center">
-                    <a href="/" class="flex items-center space-x-3">
+                    <a href="{{ config.root_path }}/" class="flex items-center space-x-3">
                         <span class="text-2xl">🎭</span>
                         <span class="text-xl font-bold text-white">IdentityCrisis</span>
                     </a>
@@ -53,11 +54,11 @@
                 <!-- Navigation links -->
                 <div class="flex items-center space-x-4">
                     {% if user %}
-                        <a href="/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                        <a href="{{ config.root_path }}/dashboard" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
                             Dashboard
                         </a>
                         {% if is_log_viewer %}
-                            <a href="/dashboard/logs" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <a href="{{ config.root_path }}/dashboard/logs" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
                                 Logs
                             </a>
                         {% endif %}
@@ -70,12 +71,12 @@
                                 </div>
                             {% endif %}
                             <span class="text-sm text-gray-300">{{ user.username }}</span>
-                            <a href="/auth/logout" class="text-gray-400 hover:text-white text-sm">
+                            <a href="{{ config.root_path }}/auth/logout" class="text-gray-400 hover:text-white text-sm">
                                 Logout
                             </a>
                         </div>
                     {% else %}
-                        <a href="/auth/login" class="bg-discord-blurple hover:bg-opacity-80 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                        <a href="{{ config.root_path }}/auth/login" class="bg-discord-blurple hover:bg-opacity-80 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                             Login with Discord
                         </a>
                     {% endif %}

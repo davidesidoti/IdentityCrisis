@@ -29,6 +29,7 @@ class Config:
     web_host: str = "0.0.0.0"
     web_port: int = 8000
     base_url: str = "http://localhost:8000"
+    root_path: str = ""
     log_file_path: str = "logs/identitycrisis.log"
     log_viewer_id: Optional[int] = None
     
@@ -68,6 +69,7 @@ class Config:
             web_host=os.getenv("WEB_HOST", "0.0.0.0"),
             web_port=int(os.getenv("WEB_PORT", "8000")),
             base_url=os.getenv("BASE_URL", "http://localhost:8000"),
+            root_path=os.getenv("ROOT_PATH", "").rstrip("/"),
             log_file_path=os.getenv("LOG_FILE_PATH", "logs/identitycrisis.log"),
             log_viewer_id=int(os.getenv("LOG_VIEWER_ID")) if os.getenv("LOG_VIEWER_ID") else None,
         )

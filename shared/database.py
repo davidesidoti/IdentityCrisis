@@ -1,12 +1,12 @@
 """
 Shared database module for IdentityCrisis.
-Uses SQLAlchemy async with PostgreSQL.
+Uses SQLAlchemy async with PostgreSQL or SQLite.
 """
 
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, JSON, func, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, JSON, func, UniqueConstraint, event
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -181,15 +181,25 @@ class Database:
     """Database connection manager."""
     
     def __init__(self, database_url: str):
-        # Convert postgres:// to postgresql+asyncpg://
-        if database_url.startswith("postgres://"):
-            database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif database_url.startswith("postgresql://"):
-            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        
-        self.engine = create_async_engine(database_url, echo=False)
+        if database_url.startswith("sqlite"):
+            if "aiosqlite" not in database_url:
+                database_url = database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+            self.engine = create_async_engine(database_url, echo=False)
+            # Enable foreign keys for SQLite
+            @event.listens_for(self.engine.sync_engine, "connect")
+            def set_sqlite_pragma(dbapi_conn, connection_record):
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+        else:
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif database_url.startswith("postgresql://"):
+                database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            self.engine = create_async_engine(database_url, echo=False)
+
         self.async_session = async_sessionmaker(
-            self.engine, 
+            self.engine,
             expire_on_commit=False
         )
     
