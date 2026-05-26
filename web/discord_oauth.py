@@ -81,7 +81,10 @@ class DiscordOAuth:
     @staticmethod
     def is_token_expired(expires_at: datetime) -> bool:
         """Check if token is expired (with 5 min buffer)."""
-        return datetime.now(timezone.utc) >= (expires_at - timedelta(minutes=5))
+        now = datetime.now(timezone.utc)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now >= (expires_at - timedelta(minutes=5))
     
     @staticmethod
     def user_has_admin(guild: dict[str, Any]) -> bool:
