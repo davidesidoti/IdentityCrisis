@@ -12,6 +12,10 @@ from web.routes.dependencies import get_optional_user
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="web/templates")
 
+
+def _login_url() -> str:
+    return f"{get_config().root_path}/auth/login"
+
 def _is_log_viewer(user: UserSession | None, config) -> bool:
     return bool(user and config.log_viewer_id and user.discord_id == config.log_viewer_id)
 
@@ -41,7 +45,7 @@ async def dashboard(
 ):
     """Dashboard page - shows user's servers."""
     if not user:
-        return RedirectResponse(url="/auth/login", status_code=302)
+        return RedirectResponse(url=_login_url(), status_code=302)
     
     config = get_config()
     return templates.TemplateResponse(
@@ -63,7 +67,7 @@ async def guild_settings(
 ):
     """Guild settings page."""
     if not user:
-        return RedirectResponse(url="/auth/login", status_code=302)
+        return RedirectResponse(url=_login_url(), status_code=302)
     
     config = get_config()
     return templates.TemplateResponse(
@@ -85,7 +89,7 @@ async def logs(
 ):
     """Bot logs page (restricted)."""
     if not user:
-        return RedirectResponse(url="/auth/login", status_code=302)
+        return RedirectResponse(url=_login_url(), status_code=302)
 
     config = get_config()
     if not _is_log_viewer(user, config):

@@ -40,7 +40,7 @@
     <div x-show="!loading && guilds.length > 0" x-cloak
          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <template x-for="guild in guilds" :key="guild.id">
-            <a :href="'/dashboard/guild/' + guild.id"
+            <a :href="ROOT_PATH + '/dashboard/guild/' + guild.id"
                class="bg-discord-dark rounded-xl p-6 border border-gray-700 hover:border-discord-blurple transition-all hover:transform hover:scale-[1.02] group">
                 <div class="flex items-center space-x-4">
                     <template x-if="guild.icon_url">
@@ -78,10 +78,10 @@ function dashboard() {
         
         async init() {
             try {
-                const response = await fetch('/api/guilds');
+                const response = await fetch(ROOT_PATH + '/api/guilds');
                 if (!response.ok) {
                     if (response.status === 401) {
-                        window.location.href = '/auth/login';
+                        window.location.href = ROOT_PATH + '/auth/login';
                         return;
                     }
                     throw new Error('Failed to load servers');

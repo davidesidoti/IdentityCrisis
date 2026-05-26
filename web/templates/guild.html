@@ -5,7 +5,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12" x-data="guildSettings('{{ guild_id }}')">
     <!-- Back button -->
-    <a href="/dashboard" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors">
+    <a href="{{ config.root_path }}/dashboard" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors">
         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -490,14 +490,14 @@ function guildSettings(guildId) {
         },
         
         async loadGuild() {
-            const response = await fetch(`/api/guilds/${this.guildId}`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}`);
             if (response.ok) {
                 this.guild = await response.json();
             }
         },
         
         async loadNicknames() {
-            const response = await fetch(`/api/guilds/${this.guildId}/nicknames`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/nicknames`);
             if (response.ok) {
                 const data = await response.json();
                 this.nicknames = data.nicknames;
@@ -506,7 +506,7 @@ function guildSettings(guildId) {
 
         async loadMemberNicknames(page = this.memberPage) {
             this.memberLoading = true;
-            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames?page=${page}&page_size=${this.memberPageSize}`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/member-nicknames?page=${page}&page_size=${this.memberPageSize}`);
             if (response.ok) {
                 const data = await response.json();
                 this.memberNicknames = data.members.map(member => ({
@@ -549,7 +549,7 @@ function guildSettings(guildId) {
         },
         
         async loadIncludedChannels() {
-            const response = await fetch(`/api/guilds/${this.guildId}/included-channels`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/included-channels`);
             if (response.ok) {
                 const data = await response.json();
                 this.includedChannels = data.channels;
@@ -557,7 +557,7 @@ function guildSettings(guildId) {
         },
         
         async updateSettings() {
-            const response = await fetch(`/api/guilds/${this.guildId}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -587,7 +587,7 @@ function guildSettings(guildId) {
         async addNickname() {
             if (!this.newNickname.trim()) return;
             
-            const response = await fetch(`/api/guilds/${this.guildId}/nicknames`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/nicknames`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nickname: this.newNickname.trim() })
@@ -604,7 +604,7 @@ function guildSettings(guildId) {
         },
         
         async deleteNickname(id) {
-            const response = await fetch(`/api/guilds/${this.guildId}/nicknames/${id}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/nicknames/${id}`, {
                 method: 'DELETE'
             });
             
@@ -617,7 +617,7 @@ function guildSettings(guildId) {
         },
 
         async saveMemberNickname(member) {
-            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -644,7 +644,7 @@ function guildSettings(guildId) {
         },
 
         async removeMemberNickname(member) {
-            const response = await fetch(`/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/member-nicknames/${member.user_id}`, {
                 method: 'DELETE'
             });
 
@@ -687,7 +687,7 @@ function guildSettings(guildId) {
         async addIncludedChannel() {
             if (!this.newChannelId.trim() || !this.newChannelName.trim()) return;
             
-            const response = await fetch(`/api/guilds/${this.guildId}/included-channels`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/included-channels`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -709,7 +709,7 @@ function guildSettings(guildId) {
         },
         
         async removeIncludedChannel(id) {
-            const response = await fetch(`/api/guilds/${this.guildId}/included-channels/${id}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/included-channels/${id}`, {
                 method: 'DELETE'
             });
             
@@ -722,7 +722,7 @@ function guildSettings(guildId) {
         },
 
 		async loadCustomChannels() {
-            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/custom-channels`);
             if (response.ok) {
                 const data = await response.json();
                 this.customChannels = data.channels;
@@ -730,7 +730,7 @@ function guildSettings(guildId) {
         },
 
         async loadChannelNicknames() {
-            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames`);
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/channel-nicknames`);
             if (response.ok) {
                 const data = await response.json();
                 this.channelNicknameGroups = data.channels;
@@ -740,7 +740,7 @@ function guildSettings(guildId) {
         async addChannelNickname() {
             if (!this.newChNickChannelId.trim() || !this.newChNickChannelName.trim() || !this.newChNickInput.trim()) return;
 
-            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/channel-nicknames`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -761,7 +761,7 @@ function guildSettings(guildId) {
         },
 
         async deleteChannelNickname(nicknameId) {
-            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames/${nicknameId}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/channel-nicknames/${nicknameId}`, {
                 method: 'DELETE'
             });
 
@@ -774,7 +774,7 @@ function guildSettings(guildId) {
         },
 
         async deleteChannelNicknameList(channelId) {
-            const response = await fetch(`/api/guilds/${this.guildId}/channel-nicknames/channel/${channelId}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/channel-nicknames/channel/${channelId}`, {
                 method: 'DELETE'
             });
 
@@ -787,7 +787,7 @@ function guildSettings(guildId) {
         },
 
         async loadAvailableRules() {
-            const response = await fetch('/api/available-rules');
+            const response = await fetch(ROOT_PATH + '/api/available-rules');
             if (response.ok) {
                 const data = await response.json();
                 this.availableRules = data.rules;
@@ -848,7 +848,7 @@ function guildSettings(guildId) {
         async addCustomChannel() {
             if (!this.newCustomChannelId.trim() || !this.newCustomChannelName.trim() || this.newCustomRules.length === 0) return;
             
-            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/custom-channels`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -872,7 +872,7 @@ function guildSettings(guildId) {
         },
         
         async deleteCustomChannel(id) {
-            const response = await fetch(`/api/guilds/${this.guildId}/custom-channels/${id}`, {
+            const response = await fetch(`${ROOT_PATH}/api/guilds/${this.guildId}/custom-channels/${id}`, {
                 method: 'DELETE'
             });
             

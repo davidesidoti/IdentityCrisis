@@ -12,6 +12,10 @@ from sqlalchemy import select
 from shared import UserSession, get_config, get_db
 from web.discord_oauth import DiscordOAuth
 
+
+def _rp() -> str:
+    return get_config().root_path
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -75,13 +79,15 @@ async def callback(request: Request, code: str = None, error: str = None):
             await session.commit()
         
         # Set session cookie and redirect to dashboard
-        response = RedirectResponse(url="/dashboard", status_code=302)
+        rp = _rp()
+        response = RedirectResponse(url=f"{rp}/dashboard", status_code=302)
         response.set_cookie(
             key="session_id",
             value=str(user["id"]),
             httponly=True,
             max_age=60 * 60 * 24 * 7,  # 7 days
             samesite="lax",
+            path=f"{rp}/" if rp else "/",
         )
         return response
         
@@ -93,6 +99,7 @@ async def callback(request: Request, code: str = None, error: str = None):
 @router.get("/logout")
 async def logout(request: Request):
     """Log out the user."""
-    response = RedirectResponse(url="/", status_code=302)
-    response.delete_cookie("session_id")
+    rp = _rp()
+    response = RedirectResponse(url=f"{rp}/", status_code=302)
+    response.delete_cookie("session_id", path=f"{rp}/" if rp else "/")
     return response
