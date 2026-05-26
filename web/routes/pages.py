@@ -28,9 +28,9 @@ async def home(
     """Home page."""
     config = get_config()
     return templates.TemplateResponse(
+        request,
         "home.html",
         {
-            "request": request,
             "user": user,
             "config": config,
             "is_log_viewer": _is_log_viewer(user, config),
@@ -49,9 +49,9 @@ async def dashboard(
     
     config = get_config()
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "user": user,
             "config": config,
             "is_log_viewer": _is_log_viewer(user, config),
@@ -71,9 +71,9 @@ async def guild_settings(
     
     config = get_config()
     return templates.TemplateResponse(
+        request,
         "guild.html",
         {
-            "request": request,
             "user": user,
             "config": config,
             "guild_id": guild_id,
@@ -96,9 +96,9 @@ async def logs(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     return templates.TemplateResponse(
+        request,
         "logs.html",
         {
-            "request": request,
             "user": user,
             "config": config,
             "is_log_viewer": True,
