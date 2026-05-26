@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''shared/database.py''\\).read\\(\\)\\); print\\(''database.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''shared/__init__.py''\\).read\\(\\)\\); print\\(''__init__.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''web/routes/api.py''\\).read\\(\\)\\); print\\(''api.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''bot/cogs/voice_handler.py''\\).read\\(\\)\\); print\\(''voice_handler.py: OK''\\)\")",
+      "Bash(git add bot/cogs/voice_handler.py shared/__init__.py shared/database.py web/routes/api.py web/templates/guild.html CLAUDE.md)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin claude/charming-jones)",
+      "Bash(gh pr:*)",
+      "Bash(where gh)",
+      "Bash(powershell.exe -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(python -m py_compile bot/cogs/voice_handler.py)"
+    ]
+  }
+}

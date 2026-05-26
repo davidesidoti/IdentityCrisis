@@ -25,6 +25,13 @@ class VoiceHandler(commands.Cog):
         self.bot = bot
         # Store original nicknames: {guild_id: {user_id: original_nick}}
         self.original_nicknames: dict[int, dict[int, Optional[str]]] = {}
+
+        # Track active (in-use) nicknames per scope to prevent duplicates
+        # Key: (guild_id, channel_id) for channel pools, (guild_id, None) for guild-wide
+        self._active_nicknames: dict[tuple[int, int | None], set[str]] = {}
+
+        # Reverse lookup: (guild_id, user_id) -> (scope_key, base_nickname)
+        self._user_nickname_scope: dict[tuple[int, int], tuple[tuple[int, int | None], str]] = {}
     
     async def _get_guild_settings(self, guild_id: int) -> Optional[Guild]:
         """Get guild settings from database."""
@@ -277,6 +284,95 @@ class VoiceHandler(commands.Cog):
                 return data["display_name"]
         return None
     
+    def _pick_unique_nickname(self, pool: list[str], scope: tuple[int, int | None]) -> str:
+        """Pick a nickname that isn't currently in use for the given scope.
+
+        If all nicknames are taken, reset the active set and pick from the full pool.
+        """
+        active = self._active_nicknames.get(scope, set())
+        available = [n for n in pool if n not in active]
+
+        if not available:
+            # All nicknames are taken — reset and use full pool
+            logger.debug("All %d nicknames in use for scope %s, resetting pool", len(pool), scope)
+            self._active_nicknames[scope] = set()
+            available = pool
+
+        return random.choice(available)
+
+    def _register_nickname(
+        self,
+        guild_id: int,
+        user_id: int,
+        base_nickname: str,
+        scope: tuple[int, int | None],
+    ) -> None:
+        """Mark a nickname as in-use for the given scope."""
+        # Release any previous nickname this user had (e.g. channel change)
+        self._release_nickname(guild_id, user_id)
+
+        if scope not in self._active_nicknames:
+            self._active_nicknames[scope] = set()
+        self._active_nicknames[scope].add(base_nickname)
+        self._user_nickname_scope[(guild_id, user_id)] = (scope, base_nickname)
+        logger.debug(
+            "Registered nickname %r for user %s in scope %s",
+            base_nickname, user_id, scope,
+        )
+
+    def _release_nickname(self, guild_id: int, user_id: int) -> None:
+        """Release a user's nickname back into the available pool."""
+        key = (guild_id, user_id)
+        entry = self._user_nickname_scope.pop(key, None)
+        if entry is None:
+            return
+
+        scope, base_nickname = entry
+        active = self._active_nicknames.get(scope)
+        if active is not None:
+            active.discard(base_nickname)
+            if not active:
+                del self._active_nicknames[scope]
+        logger.debug(
+            "Released nickname %r for user %s from scope %s",
+            base_nickname, user_id, scope,
+        )
+
+    async def _prepopulate_active_nicknames(self) -> None:
+        """Scan all voice channels on startup and track nicknames already in use.
+
+        This prevents duplicate assignments when the bot restarts while users
+        are already in voice channels with bot-assigned nicknames.
+        """
+        total = 0
+        for guild in self.bot.guilds:
+            guild_settings = await self._get_guild_settings(guild.id)
+            if guild_settings is None or not guild_settings.enabled:
+                continue
+
+            for channel in guild.voice_channels:
+                members = channel.members
+                if not members:
+                    continue
+
+                # Determine which pool applies to this channel
+                channel_nicks = await self._get_channel_nicknames(guild.id, channel.id)
+                if channel_nicks:
+                    pool = channel_nicks
+                    scope = (guild.id, channel.id)
+                else:
+                    pool = await self._get_guild_nicknames(guild.id)
+                    scope = (guild.id, None)
+
+                pool_set = set(pool)
+                for member in members:
+                    if member.nick and member.nick in pool_set:
+                        self._register_nickname(guild.id, member.id, member.nick, scope)
+                        total += 1
+
+        if total:
+            logger.info("Pre-populated %d active nickname(s) from current voice state", total)
+
     async def _change_nickname(
         self, 
         member: discord.Member, 
@@ -427,10 +523,15 @@ class VoiceHandler(commands.Cog):
         )
     
     @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Pre-populate active nicknames from current voice state on startup."""
+        await self._prepopulate_active_nicknames()
+
+    @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Create guild entry when bot joins a server."""
         await self._ensure_guild_exists(guild)
-    
+
     @commands.Cog.listener()
     async def on_voice_state_update(
         self,
@@ -455,6 +556,7 @@ class VoiceHandler(commands.Cog):
         
         # User left voice entirely
         if self._user_left_voice(before, after):
+            self._release_nickname(member.guild.id, member.id)
             # Always restore if leaving custom channel, or if restore_on_leave is enabled
             if was_custom_channel or guild_settings.restore_on_leave:
                 await self._restore_nickname(member)
@@ -464,6 +566,10 @@ class VoiceHandler(commands.Cog):
         if self._user_joined_voice(before, after) or self._user_changed_channel(before, after):
             if self._user_joined_voice(before, after):
                 await self._upsert_member_nickname(member)
+
+            # Release previous nickname slot when changing channels
+            if self._user_changed_channel(before, after):
+                self._release_nickname(member.guild.id, member.id)
 
             # If leaving a custom channel, restore first (but keep data for future use)
             if was_custom_channel and self._user_changed_channel(before, after):
@@ -505,9 +611,15 @@ class VoiceHandler(commands.Cog):
                 after.channel.id
             )
 
+            scope = None
+            base = None
+
             if channel_nicknames:
-                # Channel has its own nickname list
-                base = random.choice(channel_nicknames)
+                # Channel has its own nickname list — pick unique
+                scope = (member.guild.id, after.channel.id)
+                base = self._pick_unique_nickname(channel_nicknames, scope)
+                # Register BEFORE the await to prevent race conditions
+                self._register_nickname(member.guild.id, member.id, base, scope)
                 if custom_rules:
                     new_nickname = apply_rules(base, custom_rules)
                     logger.debug(
@@ -521,7 +633,7 @@ class VoiceHandler(commands.Cog):
                         member.id, member.guild.id, new_nickname,
                     )
             elif custom_rules:
-                # Existing behavior: transform original display name
+                # Existing behavior: transform original display name (no pool, no dedup)
                 original_name = self._get_original_display_name(member.guild.id, member.id)
                 if not original_name:
                     logger.debug(
@@ -546,11 +658,18 @@ class VoiceHandler(commands.Cog):
                     new_nickname,
                 )
             else:
-                # Standard random nickname from guild pool
+                # Standard random nickname from guild pool — pick unique
+                scope = (member.guild.id, None)
                 nicknames = await self._get_guild_nicknames(member.guild.id)
-                new_nickname = random.choice(nicknames)
+                base = self._pick_unique_nickname(nicknames, scope)
+                # Register BEFORE the await to prevent race conditions
+                self._register_nickname(member.guild.id, member.id, base, scope)
+                new_nickname = base
 
-            await self._change_nickname(member, new_nickname)
+            success = await self._change_nickname(member, new_nickname)
+            if not success and scope is not None:
+                # Permission denied or HTTP error — release the slot
+                self._release_nickname(member.guild.id, member.id)
 
 
 async def setup(bot: commands.Bot) -> None:
